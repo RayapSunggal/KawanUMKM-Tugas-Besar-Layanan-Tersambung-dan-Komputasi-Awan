@@ -6,20 +6,21 @@ import { Copy, Download, CheckCircle2, Sparkles, CalendarDays } from "lucide-rea
 import { toast } from "sonner";
 import Image from "next/image";
 
-// Mock Data
-const MOCK_RESULT = {
-  bannerUrl: "https://images.unsplash.com/photo-1621939514649-280e2ee25f60?q=80&w=1000&auto=format&fit=crop", // Gambar contoh
-  caption: "Siapa bilang ngemil enak harus mahal? 🤤 Kenalin nih Keripik Pisang lumer yang bikin harimu makin manis! Cocok banget buat nemenin nugas atau drakoran. Yuk cobain sekarang sebelum kehabisan! ✨",
-  hashtags: "#KeripikPisang #CemilanEnak #KulinerLokal #UMKMBisa #JajananKekinian",
-  schedule: "Jumat, 19:00 WIB (Jam ramai audiens kuliner).",
-};
+interface ResultViewProps {
+  onBack: () => void;
+  data: {
+    bannerUrl: string;
+    caption: string;
+    hashtags: string;
+    schedule: string;
+  };
+}
 
-export default function ResultView({ onBack }: { onBack: () => void }) {
+export default function ResultView({ onBack, data }: ResultViewProps) {
   const [isCopied, setIsCopied] = useState(false);
 
-  // Copy to Clipboard
   const handleCopy = () => {
-    const textToCopy = `${MOCK_RESULT.caption}\n\n${MOCK_RESULT.hashtags}`;
+    const textToCopy = `${data.caption}\n\n${data.hashtags}`;
     navigator.clipboard.writeText(textToCopy);
     setIsCopied(true);
     toast.success("Teks berhasil disalin!");
@@ -45,7 +46,7 @@ export default function ResultView({ onBack }: { onBack: () => void }) {
         </h3>
         <div className="relative w-full h-64 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
           <Image 
-            src={MOCK_RESULT.bannerUrl} 
+            src={data.bannerUrl} 
             alt="Banner Promosi" 
             fill 
             className="object-cover"
@@ -60,10 +61,10 @@ export default function ResultView({ onBack }: { onBack: () => void }) {
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative group">
         <h3 className="text-sm font-semibold text-slate-700 mb-2">Caption & Tag</h3>
         <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">
-          {MOCK_RESULT.caption}
+          {data.caption}
         </p>
         <p className="text-blue-600 text-sm mt-4 font-medium">
-          {MOCK_RESULT.hashtags}
+          {data.hashtags}
         </p>
         
         {/* Tombol Copy */}
@@ -83,7 +84,7 @@ export default function ResultView({ onBack }: { onBack: () => void }) {
         <div>
           <h3 className="text-sm font-semibold text-blue-950 mb-1">Rekomendasi Posting</h3>
           <p className="text-sm text-blue-800 leading-relaxed font-medium">
-            {MOCK_RESULT.schedule}
+            {data.schedule}
           </p>
         </div>
       </div>

@@ -7,30 +7,31 @@ import LoadingView from "@/components/shared/LoadingView";
 import ErrorView from "@/components/shared/ErrorView";
 import Image from "next/image";
 import type { ProductFormValues } from "@/lib/validations/product";
+import { generateCampaign } from "@/services/api";
 
 export default function Home() {
   const [view, setView] = useState<'input' | 'loading' | 'result' | 'error'>('input');
   const [savedFormData, setSavedFormData] = useState<Partial<ProductFormValues>>({});
-
-  const handleStartGenerate = (data: ProductFormValues) => {
+  const [campaignResult, setCampaignResult] = useState<any>(null);
+  const handleStartGenerate = async (data: ProductFormValues) => {
     setView('loading');
     setSavedFormData(data); 
 
-    setTimeout(() => {
-      if (data.name.toLowerCase().includes("error")) {
-        setView('error');
-      } else {
-        setView('result');
-      }
-    }, 3000);
+    try {
+      const result = await generateCampaign(data);
+      
+      setCampaignResult(result);
+      setView('result');
+    } catch (error) {
+      setView('error');
+    }
   };
 
-  const handleReset = () => {
-    setView('input');
-  };
+  const handleReset = () => setView('input');
 
   const handleStartOver = () => {
-    setSavedFormData({});
+    setSavedFormData({}); 
+    setCampaignResult(null);
     setView('input');
   }
 
@@ -59,10 +60,9 @@ export default function Home() {
           )}
 
           {view === 'loading' && <LoadingView />}
-          {view === 'result' && <ResultView onBack={handleStartOver} />}
+          {view === 'result' && <ResultView onBack={handleStartOver} data={campaignResult} />}
           {view === 'error' && <ErrorView onRetry={handleReset} />}
         </div>
-        
       </div>
     </main>
   );
