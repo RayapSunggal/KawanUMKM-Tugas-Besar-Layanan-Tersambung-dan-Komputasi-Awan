@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function ProductForm() {
+export default function ProductForm({ onSuccess }: { onSuccess: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ProductFormValues>({
@@ -40,12 +40,7 @@ export default function ProductForm() {
 
   async function onSubmit(data: ProductFormValues) {
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    toast.success("Berhasil disubmit!", {
-      description: "Data sedang diproses...",
-    });
-    
+    onSuccess(); 
     setIsSubmitting(false);
   }
 
