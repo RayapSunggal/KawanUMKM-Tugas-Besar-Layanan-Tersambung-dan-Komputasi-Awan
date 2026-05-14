@@ -6,15 +6,23 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"];
 export const productFormSchema = z.object({
   photo: z
     .any()
-    .refine((files) => files && files?.length > 0, "Foto produk wajib diunggah")
-    .refine(
-      (files) => !files || files?.length === 0 || files[0]?.size <= MAX_FILE_SIZE,
-      "Ukuran maksimal foto adalah 5MB."
-    )
-    .refine(
-      (files) => !files || files?.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0]?.type),
-      "Hanya format .jpg, .jpeg, dan .png yang didukung."
-    ),
+    .refine((files) => files !== undefined && files !== null, "Foto produk wajib diunggah")
+    .refine((files) => {
+      if (typeof files === "string" && files.startsWith("blob:")) return true;
+      
+      if (files && typeof files === "object" && files.length > 0) {
+         if (files[0].size > MAX_FILE_SIZE) return false;
+         if (!ACCEPTED_IMAGE_TYPES.includes(files[0].type)) return false;
+      }
+      return true;
+    }, "File tidak valid, ukuran maks 5MB, format .jpg/.png")
+    .refine((files) => {
+      if (typeof files === "string") return true;
+      if (files && typeof files === "object" && files.length === 0) return false;
+      return true;
+    }, "Foto produk wajib diunggah")
+    .optional(),
+
   name: z
     .string()
     .min(1, "Nama produk wajib diisi")
