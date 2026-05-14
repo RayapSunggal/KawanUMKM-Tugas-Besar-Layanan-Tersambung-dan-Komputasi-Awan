@@ -6,8 +6,21 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Kawan UMKM",
-  description: "Platform Marketing Factory UMKM",
+  title: "KawanUMKM | AI Marketing Factory",
+  description: "Platform cerdas untuk membantu UMKM menyusun strategi promosi digital, caption, hashtag, dan banner secara otomatis dengan bantuan AI.",
+  icons: {
+    icon: "/logo.png", 
+    apple: "/logo.png",
+  },
+  openGraph: {
+    title: "KawanUMKM | AI Marketing Factory",
+    description: "Ubah foto produk biasa menjadi kampanye digital profesional dengan kekuatan AI.",
+    siteName: "KawanUMKM",
+    locale: "id_ID",
+    type: "website",
+  },
+  authors: [{ name: "Tim Fisika IMPACT 5.0" }],
+  keywords: ["umkm", "marketing", "ai", "promosi", "bandung", "kampanye digital"],
 };
 
 export default function RootLayout({
