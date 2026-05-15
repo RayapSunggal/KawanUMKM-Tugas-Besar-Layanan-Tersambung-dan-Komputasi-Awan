@@ -1,0 +1,612 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: KawanUMKM — API Gateway, Lambda, SQS, DynamoDB, S3, CloudWatch
+
+# ─── Parameters ───────────────────────────────────────────────────────────────
+Parameters:
+  Stage:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Deployment stage
+
+  LambdaCodeBucket:
+    Type: String
+    Description: S3 bucket tempat ZIP Lambda di-upload sebelum deploy
+
+  LambdaCodeKey:
+    Type: String
+    Default: kawan-backend.zip
+    Description: S3 key untuk ZIP Lambda
+
+# ─── Resources ────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── S3 Bucket (upload foto + output banner) ────────────────────────────────
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "kawan-uploads-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ["*"]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldUploads
+            Status: Enabled
+            ExpirationInDays: 30
+            Prefix: uploads/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ── DynamoDB Table ─────────────────────────────────────────────────────────
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: kawan-jobs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: sessionId-createdAt-index
+          KeySchema:
+            - AttributeName: sessionId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # ── SQS Queue + DLQ ────────────────────────────────────────────────────────
+  JobDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kawan-queue-dlq
+      MessageRetentionPeriod: 1209600  # 14 hari
+
+  JobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kawan-queue
+      VisibilityTimeout: 120  # harus >= Lambda timeout (60s) * 2
+      MessageRetentionPeriod: 86400  # 1 hari
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt JobDLQ.Arn
+        maxReceiveCount: 3  # retry 3x sebelum masuk DLQ (NFR-19)
+
+  # ── IAM Role untuk Lambda ──────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: kawan-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KawanLambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !Sub "${JobsTable.Arn}/index/*"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt JobQueue.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectAttributes
+                Resource: !Sub "${UploadBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-image-generator-v2:0"
+
+  # ── Lambda Environment Variables (shared) ─────────────────────────────────
+  # Dideklarasikan sebagai mapping agar tidak duplikat
+  # Digunakan di setiap Lambda via !FindInMap
+
+  # ── Lambda: Submit Handler (POST /generate) ────────────────────────────────
+  SubmitFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-submit
+      Runtime: nodejs20.x
+      Handler: handlers/submit.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB_TABLE_NAME: !Ref JobsTable
+          SQS_QUEUE_URL: !Ref JobQueue
+          S3_BUCKET_NAME: !Ref UploadBucket
+
+  SubmitFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${SubmitFunction}"
+      RetentionInDays: 14
+
+  # ── Lambda: Status Handler (GET /status/{jobId}) ───────────────────────────
+  StatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-status
+      Runtime: nodejs20.x
+      Handler: handlers/status.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB_TABLE_NAME: !Ref JobsTable
+
+  StatusFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${StatusFunction}"
+      RetentionInDays: 14
+
+  # ── Lambda: History Handler (GET /history) ────────────────────────────────
+  HistoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-history
+      Runtime: nodejs20.x
+      Handler: handlers/history.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB_TABLE_NAME: !Ref JobsTable
+
+  HistoryFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${HistoryFunction}"
+      RetentionInDays: 14
+
+  # ── Lambda: Result Handler (GET /result/{jobId}) ──────────────────────────
+  ResultFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-result
+      Runtime: nodejs20.x
+      Handler: handlers/result.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB_TABLE_NAME: !Ref JobsTable
+          S3_BUCKET_NAME: !Ref UploadBucket
+
+  ResultFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ResultFunction}"
+      RetentionInDays: 14
+
+  # ── Lambda: Upload URL Handler (GET /upload-url) ──────────────────────────
+  UploadUrlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-upload-url
+      Runtime: nodejs20.x
+      Handler: handlers/uploadUrl.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          S3_BUCKET_NAME: !Ref UploadBucket
+
+  UploadUrlFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${UploadUrlFunction}"
+      RetentionInDays: 14
+
+  # ── Lambda: Worker (SQS trigger) ──────────────────────────────────────────
+  WorkerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: kawan-worker
+      Runtime: nodejs20.x
+      Handler: handlers/worker.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 60  # Bedrock bisa lambat, maks 60 detik (NFR-01)
+      MemorySize: 512  # Sharp image compositing butuh lebih
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB_TABLE_NAME: !Ref JobsTable
+          SQS_QUEUE_URL: !Ref JobQueue
+          S3_BUCKET_NAME: !Ref UploadBucket
+          BEDROCK_TEXT_MODEL_ID: anthropic.claude-haiku-4-5-20251001-v1:0
+          BEDROCK_IMAGE_MODEL_ID: amazon.titan-image-generator-v2:0
+
+  WorkerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${WorkerFunction}"
+      RetentionInDays: 14
+
+  # SQS → Worker trigger
+  WorkerSQSTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt JobQueue.Arn
+      FunctionName: !GetAtt WorkerFunction.Arn
+      BatchSize: 1  # proses satu job per invokasi
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: kawan-api
+      Description: KawanUMKM REST API
+      EndpointConfiguration:
+        Types: [REGIONAL]
+
+  # /generate
+  GenerateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: generate
+
+  GenerateMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref GenerateResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SubmitFunction.Arn}/invocations"
+
+  GenerateOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref GenerateResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # /status/{jobId}
+  StatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: status
+
+  StatusJobIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref StatusResource
+      PathPart: "{jobId}"
+
+  StatusMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref StatusJobIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StatusFunction.Arn}/invocations"
+
+  # /result/{jobId}
+  ResultResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: result
+
+  ResultJobIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResultResource
+      PathPart: "{jobId}"
+
+  ResultMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResultJobIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResultFunction.Arn}/invocations"
+
+  # /history
+  HistoryResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: history
+
+  HistoryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref HistoryResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HistoryFunction.Arn}/invocations"
+
+  # /upload-url
+  UploadUrlResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: upload-url
+
+  UploadUrlMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref UploadUrlResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadUrlFunction.Arn}/invocations"
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - GenerateMethod
+      - StatusMethod
+      - ResultMethod
+      - HistoryMethod
+      - UploadUrlMethod
+    Properties:
+      RestApiId: !Ref RestApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Stage
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 50
+          ThrottlingRateLimit: 25
+
+  # Lambda permissions untuk API Gateway
+  SubmitApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SubmitFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/generate"
+
+  StatusApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt StatusFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/status/*"
+
+  ResultApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ResultFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/result/*"
+
+  HistoryApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt HistoryFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/history"
+
+  UploadUrlApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt UploadUrlFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/upload-url"
+
+  # ── CloudWatch Dashboard (task 4.8) ────────────────────────────────────────
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: kawan-monitoring
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda Invocations",
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${SubmitFunction}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${WorkerFunction}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${StatusFunction}"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda Errors",
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${SubmitFunction}"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${WorkerFunction}"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda Duration (ms)",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${SubmitFunction}", {"stat": "p99"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${WorkerFunction}", {"stat": "p99"}]
+                ],
+                "period": 60,
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "SQS Queue Depth",
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${JobQueue.QueueName}"],
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${JobDLQ.QueueName}"]
+                ],
+                "period": 60,
+                "stat": "Maximum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "API Gateway Request Count",
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiName", "kawan-api"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            }
+          ]
+        }
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+Outputs:
+  ApiBaseUrl:
+    Description: Base URL API Gateway — isi ke NEXT_PUBLIC_API_BASE_URL di Amplify
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+    Export:
+      Name: KawanApiBaseUrl
+
+  UploadBucketName:
+    Description: Nama S3 bucket untuk upload foto dan hasil banner
+    Value: !Ref UploadBucket
+    Export:
+      Name: KawanUploadBucketName
+
+  JobQueueUrl:
+    Description: URL SQS Queue
+    Value: !Ref JobQueue
+
+  DashboardUrl:
+    Description: URL CloudWatch Dashboard
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=kawan-monitoring"
