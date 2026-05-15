@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# environment variables — JANGAN PERNAH DI-COMMIT
+.env
+.env.local
+.env.*.local
+
+# next.js build
+frontend/.next/
+frontend/out/
+
+# backend build output
+backend/dist/
+
+# aws credentials
+.aws/
+
+# deploy artifacts
+infrastructure/*.zip
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
