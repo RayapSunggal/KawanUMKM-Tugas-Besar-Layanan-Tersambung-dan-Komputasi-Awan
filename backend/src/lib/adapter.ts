@@ -2,11 +2,11 @@ import { Request, Response } from "express";
 import { ApiResponse } from "../types/index.js";
 
 /**
- * Mengubah handler internal (yang return ApiResponse) menjadi
- * Cloud Functions HTTP handler (Request/Response Express-style).
+ * Membungkus handler internal (return ApiResponse) menjadi
+ * Express route handler.
  *
- * Dengan adapter ini, semua handlers (submit, status, history, result, uploadUrl)
- * tidak perlu diubah sama sekali — cukup dibungkus di sini.
+ * Express sudah menangani path params (:jobId) secara native —
+ * adapter ini cukup memetakan req ke GcpEvent dan mengirim response.
  */
 export function httpAdapter(
   handler: (event: GcpEvent) => Promise<ApiResponse>
@@ -14,15 +14,11 @@ export function httpAdapter(
   return async (req: Request, res: Response): Promise<void> => {
     const event = toGcpEvent(req);
     const result = await handler(event);
-    res
-      .status(result.statusCode)
-      .set(result.headers)
-      .send(result.body);
+    res.status(result.statusCode).set(result.headers).send(result.body);
   };
 }
 
-// ─── Bentuk event internal yang dipakai handler ───────────────────────────────
-// Menyerupai subset APIGatewayProxyEvent yang dipakai handlers kita
+// ─── Event internal yang dipakai semua handlers ───────────────────────────────
 
 export interface GcpEvent {
   httpMethod: string;
@@ -37,7 +33,6 @@ function toGcpEvent(req: Request): GcpEvent {
   return {
     httpMethod: req.method,
     path: req.path,
-    // Cloud Functions via Cloud Run: path params dari express router
     pathParameters: (req.params as Record<string, string>) ?? null,
     queryStringParameters: (req.query as Record<string, string>) ?? null,
     headers: req.headers as Record<string, string>,

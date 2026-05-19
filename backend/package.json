@@ -1,20 +1,20 @@
 {
   "name": "kawan-backend",
   "version": "1.0.0",
-  "description": "KawanUMKM Backend — Cloud Functions, Pub/Sub, Firestore, Cloud Storage",
+  "description": "KawanUMKM Backend — Cloud Run, Cloud Tasks, Firestore, Cloud Storage",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "lint": "eslint src --ext .ts",
-    "test": "jest",
-    "start": "functions-framework --target=submit"
+    "start": "node dist/server.js",
+    "dev": "ts-node --esm src/server.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.9.0",
-    "@google-cloud/pubsub": "^4.7.0",
     "@google-cloud/storage": "^7.11.0",
-    "@google-cloud/functions-framework": "^3.4.0",
+    "@google-cloud/tasks": "^5.3.0",
+    "express": "^4.19.2",
     "uuid": "^11.1.1",
     "zod": "^3.23.8"
   },

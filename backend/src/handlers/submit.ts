@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { submitJobSchema } from "../lib/validate.js";
 import { putJob } from "../lib/firestore.js";
-import { enqueueJob } from "../lib/pubsub.js";
+import { enqueueJob } from "../lib/tasks.js";
 import { ok, badRequest, serverError } from "../lib/response.js";
 import { GcpEvent } from "../lib/adapter.js";
 import { Job, SqsJobMessage, ApiResponse } from "../types/index.js";
@@ -11,7 +11,7 @@ import { Job, SqsJobMessage, ApiResponse } from "../types/index.js";
  *
  * Menerima metadata produk + photoKey (GCS key dari signed upload),
  * membuat job baru di Firestore dengan status "queued",
- * lalu meng-enqueue pesan ke Pub/Sub agar Worker memprosesnya.
+ * lalu membuat Cloud Task agar Worker memprosesnya via HTTP POST /worker.
  *
  * UC-01, UC-03 | FR-03–FR-07 | NFR-02
  */
@@ -70,7 +70,7 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
   try {
     await enqueueJob(message);
   } catch (err) {
-    console.error("Pub/Sub enqueueJob gagal", err);
+    console.error("Cloud Tasks enqueueJob gagal", err);
     return serverError("Gagal mengantre job untuk diproses");
   }
 

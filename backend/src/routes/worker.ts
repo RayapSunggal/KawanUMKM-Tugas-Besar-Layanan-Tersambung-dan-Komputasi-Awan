@@ -1,35 +1,22 @@
-import { Message } from "@google-cloud/pubsub";
+import { Request, Response } from "express";
 import { updateJobStatus, saveJobResult, failJob } from "../lib/firestore.js";
-import { deleteMessage } from "../lib/pubsub.js";
 import { SqsJobMessage, GenerationResult, AssetErrors } from "../types/index.js";
 
 /**
- * Pub/Sub Worker
+ * POST /worker
  *
- * Di-trigger oleh Pub/Sub push subscription via Cloud Functions.
- * Untuk setiap pesan, Worker:
- *   1. Update status Firestore → "processing"
- *   2. Panggil AI Service (gemini-text + vertex-image) — dikerjakan AI Engineer
- *   3. Upload banner ke Cloud Storage
- *   4. Update Firestore → "completed" + simpan result
- *   5. Acknowledge pesan Pub/Sub
+ * Di-trigger oleh Cloud Tasks via HTTP POST.
+ * Cloud Tasks mengirim body JSON berisi SqsJobMessage.
+ * Return HTTP 2xx → Cloud Tasks anggap sukses dan hapus task.
+ * Return HTTP 5xx → Cloud Tasks retry sesuai queue config (max 3x → dead-letter).
  *
  * UC-09, UC-10 | FR-08–FR-12, FR-19 | NFR-19
- *
- * Skeleton ini siap diisi oleh AI Engineer di Fase 2.
  */
-export async function handler(message: Message): Promise<void> {
-  await processMessage(message);
-}
+export async function workerRoute(req: Request, res: Response): Promise<void> {
+  const jobMsg = req.body as SqsJobMessage;
 
-async function processMessage(message: Message): Promise<void> {
-  let jobMsg: SqsJobMessage;
-
-  try {
-    jobMsg = JSON.parse(message.data.toString()) as SqsJobMessage;
-  } catch {
-    console.error("Gagal parse Pub/Sub message", { data: message.data.toString() });
-    message.ack(); // ack agar tidak retry pesan rusak → masuk dead letter topic
+  if (!jobMsg?.jobId) {
+    res.status(400).json({ error: "Payload tidak valid" });
     return;
   }
 
@@ -42,12 +29,12 @@ async function processMessage(message: Message): Promise<void> {
 
   try {
     // ── Step 2: Generate teks via Gemini (dikerjakan AI Engineer) ────────────
-    // TODO (Fase 2): import & panggil generateText() dari services/gemini-text.ts
+    // TODO (Fase 2): import & panggil generateText() dari services/vertex-text.ts
     // const textResult = await generateText(jobMsg);
 
     await updateJobStatus(jobId, "processing", 40);
 
-    // ── Step 3: Generate banner via Vertex AI + Sharp (dikerjakan AI Engineer) ─
+    // ── Step 3: Generate banner via Imagen + Sharp (dikerjakan AI Engineer) ──
     // TODO (Fase 2): import & panggil generateBanner() dari services/vertex-image.ts
     // const bannerKey = await generateBanner(jobMsg);
 
@@ -65,8 +52,8 @@ async function processMessage(message: Message): Promise<void> {
     await saveJobResult(jobId, result, assetErrors);
     console.log("Job selesai diproses", { jobId });
 
-    // ── Step 5: Acknowledge pesan ─────────────────────────────────────────────
-    message.ack();
+    // HTTP 200 → Cloud Tasks hapus task otomatis
+    res.status(200).json({ jobId, status: "completed" });
   } catch (err) {
     console.error("Worker gagal memproses job", { jobId, err });
 
@@ -77,7 +64,7 @@ async function processMessage(message: Message): Promise<void> {
       console.error("Gagal update status failed di Firestore", { jobId, dbErr });
     });
 
-    // nack → Pub/Sub akan retry, setelah maxDeliveryAttempts masuk dead letter topic
-    message.nack();
+    // HTTP 500 → Cloud Tasks akan retry
+    res.status(500).json({ error: "Worker gagal memproses job" });
   }
 }
