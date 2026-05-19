@@ -1,0 +1,58 @@
+import { Storage } from "@google-cloud/storage";
+
+const storage = new Storage({ projectId: process.env.GCP_PROJECT_ID });
+
+const BUCKET = process.env.GCS_BUCKET_NAME ?? "kawan-uploads";
+
+const bucket = () => storage.bucket(BUCKET);
+
+// ─── Signed Upload URL (pengganti presigned PUT S3) ───────────────────────────
+
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn = 300
+): Promise<string> {
+  const [url] = await bucket().file(key).getSignedUrl({
+    version: "v4",
+    action: "write",
+    expires: Date.now() + expiresIn * 1000,
+    contentType,
+  });
+  return url;
+}
+
+// ─── Signed Download URL (pengganti presigned GET S3) ────────────────────────
+
+export async function getPresignedDownloadUrl(
+  key: string,
+  expiresIn = 3600
+): Promise<string> {
+  const [url] = await bucket().file(key).getSignedUrl({
+    version: "v4",
+    action: "read",
+    expires: Date.now() + expiresIn * 1000,
+  });
+  return url;
+}
+
+// ─── Upload Buffer (dipakai Worker untuk simpan banner) ───────────────────────
+
+export async function uploadBuffer(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<void> {
+  await bucket().file(key).save(buffer, { contentType });
+}
+
+// ─── Key Helpers (identik dengan s3.ts) ──────────────────────────────────────
+
+export function buildPhotoKey(jobId: string, fileName: string): string {
+  const ext = fileName.split(".").pop() ?? "jpg";
+  return `uploads/${jobId}/photo.${ext}`;
+}
+
+export function buildBannerKey(jobId: string): string {
+  return `results/${jobId}/banner.png`;
+}
