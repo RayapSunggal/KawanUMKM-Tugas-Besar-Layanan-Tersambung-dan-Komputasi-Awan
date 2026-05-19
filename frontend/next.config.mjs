@@ -12,10 +12,6 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'kawan-uploads.s3.amazonaws.com',
-      },
-      {
-        protocol: 'https',
         hostname: 'storage.googleapis.com',
       }
     ],
