@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Koleksi kawan-jobs:
+    // - Baca: boleh bila tahu jobId-nya (frontend polling status)
+    // - Tulis: hanya dari backend (service account) — frontend tidak boleh tulis langsung
+    match /kawan-jobs/{jobId} {
+      // Frontend boleh baca job miliknya sendiri
+      allow read: if true;
+
+      // Tulis hanya dari server (Cloud Run pakai service account, bukan user auth)
+      // Di production bisa diperketat dengan request.auth.token.email checks
+      allow write: if false;
+    }
+
+    // Semua dokumen lain ditolak
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

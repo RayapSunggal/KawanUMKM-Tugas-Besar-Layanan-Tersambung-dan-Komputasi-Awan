@@ -106,7 +106,30 @@ for ROLE in \
 done
 echo "  Service Account: $SA_EMAIL"
 
+# ── Firestore Security Rules ──────────────────────────────────────────────────
+echo "[6/7] Deploy Firestore security rules..."
+RULES_FILE="$(dirname "$0")/../firestore.rules"
+if [ -f "$RULES_FILE" ]; then
+  gcloud firestore databases patch "(default)" \
+    --location="$REGION" \
+    --project="$PROJECT_ID" 2>/dev/null || true
+
+  # Deploy rules via Firebase CLI (lebih reliable dari gcloud untuk rules)
+  if command -v firebase &>/dev/null; then
+    firebase deploy --only firestore:rules \
+      --project "$PROJECT_ID" 2>/dev/null && \
+      echo "  Security rules ter-deploy via Firebase CLI." || \
+      echo "  Gagal deploy rules — jalankan manual: firebase deploy --only firestore:rules"
+  else
+    echo "  Firebase CLI tidak ditemukan."
+    echo "  Install: npm install -g firebase-tools"
+    echo "  Lalu jalankan manual: firebase deploy --only firestore:rules --project $PROJECT_ID"
+  fi
+else
+  echo "  firestore.rules tidak ditemukan, skip."
+fi
+
 echo ""
-echo "[6/6] Setup selesai!"
+echo "[7/7] Setup selesai!"
 echo "Jalankan berikutnya: bash infra/deploy-cloud-run.sh"
 echo "BUCKET_NAME=$BUCKET_NAME"
