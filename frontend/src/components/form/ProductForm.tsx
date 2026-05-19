@@ -193,7 +193,7 @@ export default function ProductForm({
             render={({ field }) => (
               <FormItem className="flex-1">
                 <FormLabel className="text-slate-700 font-semibold">Kategori</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
                   <FormControl>
                     <SelectTrigger className="rounded-xl h-11">
                       <SelectValue placeholder="Pilih..." />
@@ -218,7 +218,7 @@ export default function ProductForm({
             render={({ field }) => (
               <FormItem className="flex-1">
                 <FormLabel className="text-slate-700 font-semibold">Vibe</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
                   <FormControl>
                     <SelectTrigger className="rounded-xl h-11">
                       <SelectValue placeholder="Pilih..." />

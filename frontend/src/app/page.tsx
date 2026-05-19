@@ -70,7 +70,7 @@ export default function Home() {
         <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 relative">
-              <Image src="/logo.png" alt="Logo KawanUMKM" fill className="object-contain" priority />
+              <Image src="/logo.png" alt="Logo KawanUMKM" fill className="object-contain" priority sizes="40px"/>
             </div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
               Kawan<span className="text-blue-600">UMKM</span>

@@ -3,11 +3,23 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: "https",
-        hostname: "images.unsplash.com",
+        protocol: 'https',
+        hostname: 'placehold.co',
       },
-      // Nanti domain AWS S3 bisa ditambahin di bawah ini
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'kawan-uploads.s3.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+      }
     ],
+    dangerouslyAllowSVG: true, // Buat render placeholder
   },
 };
 

@@ -50,6 +50,7 @@ export default function ResultView({ onBack, data }: ResultViewProps) {
             alt="Banner Promosi" 
             fill 
             className="object-cover"
+            sizes="(max-width: 768px) 100vw, 400px"
           />
         </div>
         <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 transition-colors font-semibold">
