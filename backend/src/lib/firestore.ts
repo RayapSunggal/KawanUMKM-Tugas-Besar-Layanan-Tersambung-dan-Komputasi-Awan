@@ -1,7 +1,10 @@
-import { Firestore, FieldValue } from "@google-cloud/firestore";
+import { Firestore } from "@google-cloud/firestore";
 import { Job, JobStatus, GenerationResult, AssetErrors } from "../types/index.js";
 
-const db = new Firestore({ projectId: process.env.GCP_PROJECT_ID });
+const db = new Firestore({
+  projectId: process.env.GCP_PROJECT_ID,
+  ignoreUndefinedProperties: true,
+});
 
 const COLLECTION = process.env.FIRESTORE_COLLECTION ?? "kawan-jobs";
 
