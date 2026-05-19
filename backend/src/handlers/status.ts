@@ -1,20 +1,17 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
-import { getJob } from "../lib/dynamodb.js";
+import { getJob } from "../lib/firestore.js";
 import { ok, badRequest, notFound, serverError } from "../lib/response.js";
-import { StatusResponse } from "../types/index.js";
+import { GcpEvent } from "../lib/adapter.js";
+import { StatusResponse, ApiResponse } from "../types/index.js";
 
 /**
  * GET /status/{jobId}
  *
- * Query DynamoDB by jobId, kembalikan status + progress.
+ * Query Firestore by jobId, kembalikan status + progress.
  * Frontend melakukan polling setiap 2 detik di halaman progress.
  *
  * UC-04 | FR-13 | NFR-02
  */
-export async function handler(
-  event: APIGatewayProxyEvent,
-  _context: Context
-): Promise<APIGatewayProxyResult> {
+export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const jobId = event.pathParameters?.jobId;
 
   if (!jobId) {
@@ -25,7 +22,7 @@ export async function handler(
   try {
     job = await getJob(jobId);
   } catch (err) {
-    console.error("DynamoDB getJob gagal", err);
+    console.error("Firestore getJob gagal", err);
     return serverError("Gagal mengambil status job");
   }
 

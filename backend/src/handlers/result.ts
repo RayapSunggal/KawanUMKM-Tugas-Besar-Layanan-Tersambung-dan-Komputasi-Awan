@@ -1,22 +1,19 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
-import { getJob } from "../lib/dynamodb.js";
-import { getPresignedDownloadUrl } from "../lib/s3.js";
+import { getJob } from "../lib/firestore.js";
+import { getPresignedDownloadUrl } from "../lib/storage.js";
 import { ok, badRequest, notFound, serverError } from "../lib/response.js";
-import { ResultResponse } from "../types/index.js";
+import { GcpEvent } from "../lib/adapter.js";
+import { ResultResponse, ApiResponse } from "../types/index.js";
 
 /**
  * GET /result/{jobId}
  *
  * Mengembalikan hasil generasi lengkap: captions, hashtags, jadwal,
- * ide konten, dan presigned URL banner S3.
+ * ide konten, dan signed URL banner dari Cloud Storage.
  * Hanya tersedia bila status job = "completed".
  *
  * UC-06 | FR-16, FR-17
  */
-export async function handler(
-  event: APIGatewayProxyEvent,
-  _context: Context
-): Promise<APIGatewayProxyResult> {
+export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const jobId = event.pathParameters?.jobId;
 
   if (!jobId) {
@@ -27,7 +24,7 @@ export async function handler(
   try {
     job = await getJob(jobId);
   } catch (err) {
-    console.error("DynamoDB getJob gagal", err);
+    console.error("Firestore getJob gagal", err);
     return serverError("Gagal mengambil hasil generasi");
   }
 
@@ -39,15 +36,12 @@ export async function handler(
     return notFound("Hasil generasi belum tersedia");
   }
 
-  // Buat presigned URL segar untuk banner (berlaku 1 jam)
   let bannerUrl: string | undefined;
   if (job.result.bannerUrl) {
     try {
-      // bannerUrl di DynamoDB menyimpan S3 key, bukan URL penuh
       bannerUrl = await getPresignedDownloadUrl(job.result.bannerUrl);
     } catch (err) {
-      console.warn("Gagal membuat presigned URL banner", err);
-      // Banner gagal tidak fatal — kembalikan hasil teks tetap ada
+      console.warn("Gagal membuat signed URL banner", err);
     }
   }
 

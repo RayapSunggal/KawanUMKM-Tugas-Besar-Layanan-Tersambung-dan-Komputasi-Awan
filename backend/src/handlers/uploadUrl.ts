@@ -1,22 +1,20 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 import { v4 as uuidv4 } from "uuid";
 import { presignedUrlSchema } from "../lib/validate.js";
-import { getPresignedUploadUrl, buildPhotoKey } from "../lib/s3.js";
+import { getPresignedUploadUrl, buildPhotoKey } from "../lib/storage.js";
 import { ok, badRequest, serverError } from "../lib/response.js";
+import { GcpEvent } from "../lib/adapter.js";
+import { ApiResponse } from "../types/index.js";
 
 /**
  * GET /upload-url
  *
- * Menghasilkan S3 presigned PUT URL agar frontend bisa upload foto
- * langsung ke S3 tanpa melewati Lambda (bypass untuk file besar).
+ * Menghasilkan Cloud Storage signed PUT URL agar frontend bisa upload foto
+ * langsung ke GCS tanpa melewati Cloud Function.
  * Setelah upload selesai, frontend menyertakan photoKey ke POST /generate.
  *
  * FR-01 | NFR-09
  */
-export async function handler(
-  event: APIGatewayProxyEvent,
-  _context: Context
-): Promise<APIGatewayProxyResult> {
+export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const qs = event.queryStringParameters ?? {};
 
   const parsed = presignedUrlSchema.safeParse({
@@ -37,7 +35,7 @@ export async function handler(
   try {
     uploadUrl = await getPresignedUploadUrl(photoKey, contentType);
   } catch (err) {
-    console.error("Gagal generate presigned URL", err);
+    console.error("Gagal generate signed URL", err);
     return serverError("Gagal membuat URL upload");
   }
 

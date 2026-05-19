@@ -1,7 +1,7 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
-import { listJobsBySession } from "../lib/dynamodb.js";
+import { listJobsBySession } from "../lib/firestore.js";
 import { ok, badRequest, serverError } from "../lib/response.js";
-import { HistoryResponse, HistoryItem } from "../types/index.js";
+import { GcpEvent } from "../lib/adapter.js";
+import { HistoryResponse, HistoryItem, ApiResponse } from "../types/index.js";
 
 /**
  * GET /history
@@ -11,10 +11,7 @@ import { HistoryResponse, HistoryItem } from "../types/index.js";
  *
  * UC-05 | FR-15
  */
-export async function handler(
-  event: APIGatewayProxyEvent,
-  _context: Context
-): Promise<APIGatewayProxyResult> {
+export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const sessionId = event.queryStringParameters?.sessionId;
 
   if (!sessionId) {
@@ -25,7 +22,7 @@ export async function handler(
   try {
     jobs = await listJobsBySession(sessionId);
   } catch (err) {
-    console.error("DynamoDB listJobsBySession gagal", err);
+    console.error("Firestore listJobsBySession gagal", err);
     return serverError("Gagal mengambil riwayat generasi");
   }
 
@@ -37,6 +34,5 @@ export async function handler(
   }));
 
   const response: HistoryResponse = { jobs: items };
-
   return ok(response);
 }
