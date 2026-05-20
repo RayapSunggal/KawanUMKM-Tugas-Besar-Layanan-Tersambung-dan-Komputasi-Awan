@@ -54,6 +54,21 @@ export async function saveJobResult(
   });
 }
 
+export async function savePartialJobResult(
+  jobId: string,
+  result: GenerationResult,
+  progress: number,
+  assetErrors?: AssetErrors
+): Promise<void> {
+  await col().doc(jobId).update({
+    status: "processing" as JobStatus,
+    progress,
+    result,
+    assetErrors: assetErrors ?? {},
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 // ─── Mark Failed ─────────────────────────────────────────────────────────────
 
 export async function failJob(jobId: string, errorMessage: string): Promise<void> {

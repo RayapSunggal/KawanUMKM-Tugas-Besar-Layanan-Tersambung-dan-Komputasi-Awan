@@ -9,7 +9,7 @@ import type {
 import { getDefaultVertexAiClient } from "./vertex-client.js";
 
 export function getImageModelId(): string {
-  return process.env.GCP_VERTEX_IMAGE_MODEL ?? "imagen-4.0-generate-001";
+  return process.env.GCP_VERTEX_IMAGE_MODEL ?? "gemini-3-pro-image-preview";
 }
 
 export async function generateMarketingImage(
@@ -20,7 +20,12 @@ export async function generateMarketingImage(
   const prompt = buildMarketingImagePrompt(input);
 
   try {
-    const response = await client.generateImage({ model, prompt });
+    const response = await client.generateImage({
+      model,
+      prompt,
+      productImageBase64: input.productImageBase64,
+      productImageMimeType: input.productImageMimeType,
+    });
 
     if (!response.imageBase64) {
       throw new AIServiceError(

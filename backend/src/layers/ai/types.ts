@@ -48,11 +48,13 @@ export type GenerateMarketingImageInput = {
   vibe: MarketingVibe;
   price?: string | number | null;
   tagline?: string;
+  productImageBase64?: string;
+  productImageMimeType?: string;
 };
 
 export type MarketingImageResult = {
   imageBase64: string;
-  mimeType: "image/png" | "image/jpeg";
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
   rawProvider?: {
     provider: typeof AI_PROVIDER;
     model: string;
@@ -73,5 +75,7 @@ export type VertexAiClient = {
   generateImage(params: {
     model: string;
     prompt: string;
+    productImageBase64?: string;
+    productImageMimeType?: string;
   }): Promise<VertexImagePayload>;
 };

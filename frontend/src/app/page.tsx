@@ -64,8 +64,14 @@ export default function Home() {
   };
 
   const handleSelectHistory = async (item: CampaignHistoryItem) => {
-    if (item.status !== "completed") {
-      setErrorMessage("Hasil untuk job ini belum selesai diproses.");
+    if (item.status === "queued") {
+      setErrorMessage("Hasil untuk job ini belum mulai diproses.");
+      setView("error");
+      return;
+    }
+
+    if (item.status === "failed") {
+      setErrorMessage("Job ini gagal diproses.");
       setView("error");
       return;
     }
@@ -105,6 +111,7 @@ export default function Home() {
                 className="object-contain"
                 priority
                 sizes="40px"
+                unoptimized
               />
             </div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">

@@ -46,6 +46,23 @@ export async function uploadBuffer(
   await bucket().file(key).save(buffer, { contentType });
 }
 
+export async function downloadBuffer(
+  key: string
+): Promise<{ buffer: Buffer; contentType: string }> {
+  const file = bucket().file(key);
+  const [downloadResult, metadataResult] = await Promise.all([
+    file.download(),
+    file.getMetadata(),
+  ]);
+  const [buffer] = downloadResult;
+  const [metadata] = metadataResult;
+
+  return {
+    buffer,
+    contentType: metadata.contentType ?? inferContentType(key),
+  };
+}
+
 // ─── Key Helpers (identik dengan s3.ts) ──────────────────────────────────────
 
 export function buildPhotoKey(jobId: string, fileName: string): string {
@@ -55,4 +72,12 @@ export function buildPhotoKey(jobId: string, fileName: string): string {
 
 export function buildBannerKey(jobId: string, extension = "png"): string {
   return `results/${jobId}/banner.${extension}`;
+}
+
+function inferContentType(key: string): string {
+  const extension = key.split(".").pop()?.toLowerCase();
+
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  return "image/jpeg";
 }

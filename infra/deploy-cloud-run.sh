@@ -49,7 +49,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --service-account="$SA_EMAIL" \
   --memory=512Mi \
   --cpu=1 \
-  --timeout=60s \
+  --timeout=300s \
   --concurrency=80 \
   --set-env-vars="\
 GCP_PROJECT_ID=${PROJECT_ID},\
@@ -59,7 +59,7 @@ GCS_BUCKET_NAME=${BUCKET_NAME},\
 FIRESTORE_COLLECTION=kawan-jobs,\
 CLOUD_TASKS_QUEUE=kawan-jobs,\
 GCP_VERTEX_TEXT_MODEL=gemini-2.5-flash,\
-GCP_VERTEX_IMAGE_MODEL=imagen-4.0-generate-001,\
+GCP_VERTEX_IMAGE_MODEL=gemini-3-pro-image-preview,\
 WORKER_URL=${EXISTING_URL}" \
   --project="$PROJECT_ID"
 

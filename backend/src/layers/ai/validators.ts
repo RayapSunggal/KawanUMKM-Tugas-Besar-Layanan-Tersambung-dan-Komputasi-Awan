@@ -21,5 +21,5 @@ export const marketingTextPayloadSchema = z.object({
 
 export const marketingImagePayloadSchema = z.object({
   imageBase64: z.string().trim().min(1),
-  mimeType: z.enum(["image/png", "image/jpeg"]),
+  mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
 });

@@ -93,11 +93,14 @@ export interface HistoryResponse {
 
 export interface ResultResponse {
   jobId: string;
+  status: JobStatus;
+  progress: number;
   captions: CaptionVariant[];
   hashtags: string[];
   schedule: ScheduleSuggestion;
   contentIdeas: string[];
   bannerUrl?: string;
+  assetErrors?: AssetErrors;
 }
 
 // ─── Lambda Helpers ───────────────────────────────────────────────────────────

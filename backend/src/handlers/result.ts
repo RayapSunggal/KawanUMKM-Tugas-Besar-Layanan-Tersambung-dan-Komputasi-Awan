@@ -7,9 +7,10 @@ import { ResultResponse, ApiResponse } from "../types/index.js";
 /**
  * GET /result/{jobId}
  *
- * Mengembalikan hasil generasi lengkap: captions, hashtags, jadwal,
+ * Mengembalikan hasil generasi: captions, hashtags, jadwal,
  * ide konten, dan signed URL banner dari Cloud Storage.
- * Hanya tersedia bila status job = "completed".
+ * Tersedia begitu text generation selesai. Banner bisa menyusul saat
+ * status job masih "processing".
  *
  * UC-06 | FR-16, FR-17
  */
@@ -32,7 +33,7 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
     return notFound(`Job dengan ID ${jobId} tidak ditemukan`);
   }
 
-  if (job.status !== "completed" || !job.result) {
+  if (!job.result) {
     return notFound("Hasil generasi belum tersedia");
   }
 
@@ -47,11 +48,14 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
 
   const response: ResultResponse = {
     jobId: job.jobId,
+    status: job.status,
+    progress: job.progress,
     captions: job.result.captions,
     hashtags: job.result.hashtags,
     schedule: job.result.schedule,
     contentIdeas: job.result.contentIdeas,
     bannerUrl,
+    assetErrors: job.assetErrors,
   };
 
   return ok(response);

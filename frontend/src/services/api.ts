@@ -16,6 +16,8 @@ export type ScheduleSuggestion = {
 
 export type CampaignResult = {
   jobId: string;
+  status: JobStatus;
+  progress: number;
   bannerUrl?: string;
   caption: string;
   captions: CaptionVariant[];
@@ -24,6 +26,10 @@ export type CampaignResult = {
   schedule: ScheduleSuggestion;
   scheduleText: string;
   contentIdeas: string[];
+  assetErrors?: {
+    captionFailed?: boolean;
+    bannerFailed?: boolean;
+  };
 };
 
 export type CampaignHistoryItem = {
@@ -52,11 +58,17 @@ type StatusResponse = {
 
 type ResultResponse = {
   jobId: string;
+  status: JobStatus;
+  progress: number;
   captions: CaptionVariant[];
   hashtags: string[];
   schedule: ScheduleSuggestion;
   contentIdeas: string[];
   bannerUrl?: string;
+  assetErrors?: {
+    captionFailed?: boolean;
+    bannerFailed?: boolean;
+  };
 };
 
 type HistoryResponse = {
@@ -69,7 +81,7 @@ type HistoryResponse = {
 };
 
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 90;
+const MAX_TEXT_POLL_ATTEMPTS = 90;
 
 export function getSessionId(): string {
   if (typeof window === "undefined") {
@@ -110,16 +122,20 @@ export async function generateCampaign(
     photoKey,
   });
 
-  await waitForJobCompletion(apiUrl, jobId);
-  return fetchCampaignResult(jobId);
+  return waitForTextResult(apiUrl, jobId);
 }
 
 export async function fetchCampaignResult(
   jobId: string
 ): Promise<CampaignResult> {
   const apiUrl = getApiBaseUrl();
-  const result = await fetchJson<ResultResponse>(`${apiUrl}/result/${jobId}`);
+  const result = await fetchCampaignResultFromApi(apiUrl, jobId);
   return mapResultResponse(result);
+}
+
+export async function fetchCampaignStatus(jobId: string): Promise<StatusResponse> {
+  const apiUrl = getApiBaseUrl();
+  return fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
 }
 
 export async function fetchCampaignHistory(): Promise<CampaignHistoryItem[]> {
@@ -190,24 +206,38 @@ async function submitGenerationJob(
   });
 }
 
-async function waitForJobCompletion(
+async function waitForTextResult(
   apiUrl: string,
   jobId: string
-): Promise<void> {
-  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+): Promise<CampaignResult> {
+  for (let attempt = 0; attempt < MAX_TEXT_POLL_ATTEMPTS; attempt += 1) {
     await delay(POLL_INTERVAL_MS);
-    const status = await fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
 
-    if (status.status === "completed") {
-      return;
+    try {
+      const result = await fetchCampaignResultFromApi(apiUrl, jobId);
+      if (result.captions.length > 0 || result.status === "completed") {
+        return mapResultResponse(result);
+      }
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 404)) {
+        throw error;
+      }
     }
 
+    const status = await fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
     if (status.status === "failed") {
       throw new Error("Proses AI gagal diproses oleh worker");
     }
   }
 
-  throw new Error("Waktu tunggu AI habis. Coba cek status job beberapa saat lagi.");
+  throw new Error("Waktu tunggu teks AI habis. Coba cek status job beberapa saat lagi.");
+}
+
+async function fetchCampaignResultFromApi(
+  apiUrl: string,
+  jobId: string
+): Promise<ResultResponse> {
+  return fetchJson<ResultResponse>(`${apiUrl}/result/${jobId}`);
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -218,7 +248,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = await readErrorMessage(response);
-    throw new Error(message || `Request gagal (${response.status})`);
+    throw new ApiError(
+      message || `Request gagal (${response.status})`,
+      response.status
+    );
   }
 
   return (await response.json()) as T;
@@ -241,6 +274,8 @@ function mapResultResponse(result: ResultResponse): CampaignResult {
 
   return {
     jobId: result.jobId,
+    status: result.status,
+    progress: result.progress,
     bannerUrl: result.bannerUrl || undefined,
     caption,
     captions: result.captions,
@@ -249,6 +284,7 @@ function mapResultResponse(result: ResultResponse): CampaignResult {
     schedule: result.schedule,
     scheduleText: formatSchedule(result.schedule),
     contentIdeas: result.contentIdeas,
+    assetErrors: result.assetErrors,
   };
 }
 
@@ -274,4 +310,11 @@ function formatTimestamp(value: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
 }

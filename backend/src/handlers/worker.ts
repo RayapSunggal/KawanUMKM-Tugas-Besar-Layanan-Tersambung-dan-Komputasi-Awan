@@ -1,9 +1,10 @@
 import {
   failJob,
   saveJobResult,
+  savePartialJobResult,
   updateJobStatus,
 } from "../lib/firestore.js";
-import { buildBannerKey, uploadBuffer } from "../lib/storage.js";
+import { buildBannerKey, downloadBuffer, uploadBuffer } from "../lib/storage.js";
 import {
   AIServiceError,
   generateMarketingImage,
@@ -29,9 +30,18 @@ export async function processWorkerJob(jobMsg: SqsJobMessage): Promise<void> {
 
   try {
     textResult = await tryGenerateText(jobMsg, assetErrors);
-    await updateJobStatus(jobId, "processing", 40);
+    if (textResult) {
+      await savePartialJobResult(
+        jobId,
+        buildGenerationResult(textResult),
+        55,
+        assetErrors
+      );
+    } else {
+      await updateJobStatus(jobId, "processing", 40);
+    }
 
-    bannerKey = await tryGenerateBanner(jobMsg, assetErrors);
+    bannerKey = await tryGenerateBanner(jobMsg, assetErrors, textResult);
     await updateJobStatus(jobId, "processing", 80);
 
     if (!textResult && !bannerKey) {
@@ -73,19 +83,24 @@ async function tryGenerateText(
 
 async function tryGenerateBanner(
   jobMsg: SqsJobMessage,
-  assetErrors: AssetErrors
+  assetErrors: AssetErrors,
+  textResult: MarketingTextResult | null
 ): Promise<string | undefined> {
+  const productImage = await tryReadProductImage(jobMsg);
   const input: GenerateMarketingImageInput = {
     productName: jobMsg.productName,
     productDescription: jobMsg.description,
     category: jobMsg.category,
     vibe: jobMsg.vibe,
     price: jobMsg.price ?? null,
+    tagline: textResult?.captions.short,
+    productImageBase64: productImage?.base64,
+    productImageMimeType: productImage?.mimeType,
   };
 
   try {
     const image = await generateMarketingImage(input);
-    const extension = image.mimeType === "image/jpeg" ? "jpg" : "png";
+    const extension = getImageExtension(image.mimeType);
     const bannerKey = buildBannerKey(jobMsg.jobId, extension);
     await uploadBuffer(
       bannerKey,
@@ -101,6 +116,34 @@ async function tryGenerateBanner(
     });
     return undefined;
   }
+}
+
+async function tryReadProductImage(
+  jobMsg: SqsJobMessage
+): Promise<{ base64: string; mimeType: string } | undefined> {
+  try {
+    const image = await downloadBuffer(jobMsg.photoKey);
+    return {
+      base64: image.buffer.toString("base64"),
+      mimeType: normalizeImageMimeType(image.contentType),
+    };
+  } catch (err) {
+    console.warn("Product photo could not be read for banner generation", {
+      jobId: jobMsg.jobId,
+      error: getSafeFailureMessage(err),
+    });
+    return undefined;
+  }
+}
+
+function getImageExtension(mimeType: string): string {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/webp") return "webp";
+  return "png";
+}
+
+function normalizeImageMimeType(mimeType: string): string {
+  return mimeType === "image/jpg" ? "image/jpeg" : mimeType;
 }
 
 function buildGenerationResult(

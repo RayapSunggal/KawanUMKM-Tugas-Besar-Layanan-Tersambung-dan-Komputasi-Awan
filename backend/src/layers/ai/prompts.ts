@@ -37,19 +37,25 @@ export function buildMarketingTextPrompt(
 export function buildMarketingImagePrompt(
   input: GenerateMarketingImageInput
 ): string {
+  const productPhotoDirection = input.productImageBase64
+    ? "Use the provided product photo as the main hero product. Keep the product recognizable, preserve real packaging details, and improve the surroundings with professional advertising lighting."
+    : "Create a premium product-inspired hero visual that clearly matches the category and product description.";
+
   return [
-    "Square 1:1 social media marketing banner background for an Indonesian UMKM product.",
+    "Create a finished 16:9 social media marketing banner for an Indonesian UMKM product.",
+    "Style: premium commercial advertising, polished marketplace banner, clean composition, high contrast, appetizing/aspirational lighting where appropriate.",
+    productPhotoDirection,
     `Product category: ${input.category}.`,
     `Product name context: ${input.productName}.`,
     `Product description context: ${input.productDescription}.`,
     `Marketing vibe: ${input.vibe}.`,
     `Price context only: ${formatOptional(input.price)}.`,
     input.tagline
-      ? `Tagline context: ${input.tagline}. Do not render readable text.`
-      : "No readable text.",
-    "Leave clean empty space for later compositing of product photo, tagline, price, and call-to-action.",
-    "Do not include copyrighted brand references, recognizable logos, fake labels, or watermarks.",
-    "The image must work as a 1080x1080-compatible banner asset.",
+      ? `Use this short Indonesian marketing line if readable text is included: "${input.tagline}".`
+      : "If readable text is included, keep it short and accurate.",
+    "Use at most two readable text elements: product name and one short tagline or price. Avoid tiny text, fake labels, misspelled words, extra logos, watermarks, and copyrighted brand references.",
+    "Leave enough clean copy space so the banner still works if the UI overlays text later.",
+    "The output must be a 16:9 banner suitable for Instagram, WhatsApp, and ecommerce promotion.",
   ].join(" ");
 }
 
