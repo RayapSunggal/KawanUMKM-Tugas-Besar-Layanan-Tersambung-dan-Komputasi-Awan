@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +15,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 import {
   fetchCampaignResult,
   type CampaignResult,
@@ -23,6 +24,7 @@ import {
 interface ResultViewProps {
   onBack: () => void;
   data: CampaignResult;
+  deferBanner?: boolean;
 }
 
 const captionLabels: Record<CaptionVariant["length"], string> = {
@@ -31,31 +33,56 @@ const captionLabels: Record<CaptionVariant["length"], string> = {
   panjang: "Panjang",
 };
 
-export default function ResultView({ onBack, data }: ResultViewProps) {
+export default function ResultView({
+  onBack,
+  data,
+  deferBanner = false,
+}: ResultViewProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [currentData, setCurrentData] = useState(data);
+  const [isBannerDeferred, setIsBannerDeferred] = useState(deferBanner);
+  const visibleBannerUrl = isBannerDeferred ? undefined : currentData.bannerUrl;
   const isBannerGenerating =
-    !currentData.bannerUrl &&
-    currentData.status === "processing" &&
+    !visibleBannerUrl &&
+    (currentData.status === "processing" || isBannerDeferred) &&
     !currentData.assetErrors?.bannerFailed;
 
   useEffect(() => {
     setCurrentData(data);
-  }, [data]);
+    setIsBannerDeferred(deferBanner);
+  }, [data, deferBanner]);
 
   useEffect(() => {
     if (!isBannerGenerating) return;
+    let isActive = true;
 
-    const timer = window.setInterval(async () => {
+    const refreshBanner = async () => {
       try {
-        setCurrentData(await fetchCampaignResult(currentData.jobId));
+        const latest = await fetchCampaignResult(currentData.jobId);
+        if (!isActive) return;
+        setCurrentData(latest);
+        setIsBannerDeferred(false);
       } catch {
-        // Keep the current text result visible while the banner is still cooking.
+        if (isActive && isBannerDeferred && currentData.bannerUrl) {
+          setIsBannerDeferred(false);
+        }
       }
-    }, 2500);
+    };
 
-    return () => window.clearInterval(timer);
-  }, [currentData.jobId, isBannerGenerating]);
+    const firstPoll = window.setTimeout(refreshBanner, 1800);
+    const timer = window.setInterval(refreshBanner, 3000);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(firstPoll);
+      window.clearInterval(timer);
+    };
+  }, [
+    currentData.bannerUrl,
+    currentData.jobId,
+    isBannerDeferred,
+    isBannerGenerating,
+  ]);
 
   const handleCopy = () => {
     const textToCopy = `${currentData.caption}\n\n${currentData.hashtagsText}`;
@@ -145,7 +172,10 @@ export default function ResultView({ onBack, data }: ResultViewProps) {
         </div>
       )}
 
-      <BannerPreview data={currentData} isGenerating={isBannerGenerating} />
+      <BannerPreview
+        bannerUrl={visibleBannerUrl}
+        isGenerating={isBannerGenerating}
+      />
 
       <Button
         onClick={onBack}
@@ -158,10 +188,10 @@ export default function ResultView({ onBack, data }: ResultViewProps) {
 }
 
 function BannerPreview({
-  data,
+  bannerUrl,
   isGenerating,
 }: {
-  data: CampaignResult;
+  bannerUrl?: string;
   isGenerating: boolean;
 }) {
   return (
@@ -170,22 +200,20 @@ function BannerPreview({
         <Sparkles className="w-4 h-4 text-blue-500" /> Preview Banner
       </h3>
 
-      {data.bannerUrl ? (
+      {bannerUrl ? (
         <>
           <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100">
-            <Image
-              src={data.bannerUrl}
+            <img
+              src={bannerUrl}
               alt="Banner Promosi"
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 400px"
+              className="h-full w-full object-cover"
             />
           </div>
           <Button
             asChild
             className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 transition-colors font-semibold"
           >
-            <a href={data.bannerUrl} target="_blank" rel="noreferrer">
+            <a href={bannerUrl} target="_blank" rel="noreferrer">
               <Download className="w-4 h-4 mr-2" /> Buka Banner
             </a>
           </Button>
@@ -210,27 +238,20 @@ function BannerPreview({
 function BannerLoadingVisual() {
   return (
     <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-      <Image
+      <img
         src="/LoadingImageGeneration.jpg"
         alt=""
-        fill
-        className="object-cover"
-        sizes="(max-width: 768px) 100vw, 400px"
-        priority
-        unoptimized
+        className="h-full w-full object-cover"
       />
       <div className="absolute inset-0 bg-white/10" />
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative h-20 w-20">
           <Loader2 className="absolute inset-0 h-20 w-20 animate-spin text-white/80 drop-shadow" />
           <div className="absolute inset-3 rounded-full bg-white/85 shadow-lg backdrop-blur-sm">
-            <Image
+            <img
               src="/logo.png"
               alt="Logo KawanUMKM"
-              fill
-              className="object-contain p-2"
-              sizes="56px"
-              unoptimized
+              className="h-full w-full object-contain p-2"
             />
           </div>
         </div>

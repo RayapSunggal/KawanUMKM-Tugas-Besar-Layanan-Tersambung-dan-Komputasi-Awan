@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +27,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import Image from "next/image";
 
 export default function ProductForm({ 
   onSuccess, 
@@ -119,11 +120,10 @@ export default function ProductForm({
                   {photoPreview && (
                     <div className="flex flex-col items-center justify-center space-y-4 py-2 animate-in fade-in duration-300">
                       <div className="relative w-full h-40 rounded-xl overflow-hidden shadow-md border-2 border-white">
-                        <Image 
+                        <img
                           src={photoPreview} 
                           alt="Preview Foto UMKM" 
-                          fill 
-                          className="object-cover" 
+                          className="h-full w-full object-cover"
                         />
                       </div>
                       

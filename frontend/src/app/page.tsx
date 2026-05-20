@@ -1,12 +1,13 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useCallback, useEffect, useState } from "react";
 import ProductForm from "@/components/form/ProductForm";
 import ResultView from "@/components/result/ResultView";
 import LoadingView from "@/components/shared/LoadingView";
 import ErrorView from "@/components/shared/ErrorView";
 import HistoryView from "@/components/history/HistoryView";
-import Image from "next/image";
 import { History as HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ export default function Home() {
   );
   const [history, setHistory] = useState<CampaignHistoryItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [deferBanner, setDeferBanner] = useState(false);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -51,6 +53,7 @@ export default function Home() {
     try {
       const result = await generateCampaign(data);
       setCampaignResult(result);
+      setDeferBanner(true);
       await loadHistory();
       setView("result");
     } catch (error) {
@@ -78,6 +81,7 @@ export default function Home() {
 
     setView("loading");
     setErrorMessage(undefined);
+    setDeferBanner(false);
 
     try {
       const result = await fetchCampaignResult(item.jobId);
@@ -95,6 +99,7 @@ export default function Home() {
     setSavedFormData({});
     setCampaignResult(null);
     setErrorMessage(undefined);
+    setDeferBanner(false);
     setView("input");
   };
 
@@ -104,14 +109,10 @@ export default function Home() {
         <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 relative">
-              <Image
+              <img
                 src="/logo.png"
                 alt="Logo KawanUMKM"
-                fill
-                className="object-contain"
-                priority
-                sizes="40px"
-                unoptimized
+                className="h-full w-full object-contain"
               />
             </div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
@@ -153,7 +154,11 @@ export default function Home() {
 
           {view === "loading" && <LoadingView />}
           {view === "result" && campaignResult && (
-            <ResultView onBack={handleStartOver} data={campaignResult} />
+            <ResultView
+              onBack={handleStartOver}
+              data={campaignResult}
+              deferBanner={deferBanner}
+            />
           )}
           {view === "error" && (
             <ErrorView
