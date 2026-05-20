@@ -1,141 +1,277 @@
 import { ProductFormValues } from "@/lib/validations/product";
 
-// Mock Data
-const MOCK_RESULT = {
-  bannerUrl: "https://images.unsplash.com/photo-1621939514649-280e2ee25f60?q=80&w=1000&auto=format&fit=crop",
-  caption: "Siapa bilang ngemil enak harus mahal? 🤤 Kenalin nih Keripik Pisang lumer yang bikin harimu makin manis! Cocok banget buat nemenin nugas atau drakoran. Yuk cobain sekarang sebelum kehabisan! ✨",
-  hashtags: "#KeripikPisang #CemilanEnak #KulinerLokal #UMKMBisa #JajananKekinian",
-  schedule: "Jumat, 19:00 WIB (Jam ramai audiens kuliner).",
+type JobStatus = "queued" | "processing" | "completed" | "failed";
+type CaptionLength = "pendek" | "sedang" | "panjang";
+
+export type CaptionVariant = {
+  length: CaptionLength;
+  text: string;
 };
 
-// Helper untuk get/add Session ID
-function getSessionId(): string {
-  if (typeof window !== "undefined") {
-    let sessionId = localStorage.getItem("kawan_session_id");
-    if (!sessionId) {
-      sessionId = typeof crypto !== "undefined" && crypto.randomUUID 
-        ? crypto.randomUUID() 
-        : `sess-${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem("kawan_session_id", sessionId);
-    }
-    return sessionId;
+export type ScheduleSuggestion = {
+  day: string;
+  time: string;
+  reason: string;
+};
+
+export type CampaignResult = {
+  jobId: string;
+  bannerUrl?: string;
+  caption: string;
+  captions: CaptionVariant[];
+  hashtags: string[];
+  hashtagsText: string;
+  schedule: ScheduleSuggestion;
+  scheduleText: string;
+  contentIdeas: string[];
+};
+
+export type CampaignHistoryItem = {
+  jobId: string;
+  productName: string;
+  createdAt: string;
+  timestamp: string;
+  status: JobStatus;
+};
+
+type UploadUrlResponse = {
+  uploadUrl: string;
+  photoKey: string;
+};
+
+type SubmitJobResponse = {
+  jobId: string;
+  status: "queued";
+};
+
+type StatusResponse = {
+  jobId: string;
+  status: JobStatus;
+  progress: number;
+};
+
+type ResultResponse = {
+  jobId: string;
+  captions: CaptionVariant[];
+  hashtags: string[];
+  schedule: ScheduleSuggestion;
+  contentIdeas: string[];
+  bannerUrl?: string;
+};
+
+type HistoryResponse = {
+  jobs: Array<{
+    jobId: string;
+    productName: string;
+    createdAt: string;
+    status: JobStatus;
+  }>;
+};
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 90;
+
+export function getSessionId(): string {
+  if (typeof window === "undefined") {
+    return "default-session-id";
   }
-  return "default-session-id";
+
+  let sessionId = localStorage.getItem("kawan_session_id");
+  if (!sessionId) {
+    sessionId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `sess-${Math.random().toString(36).slice(2, 11)}`;
+    localStorage.setItem("kawan_session_id", sessionId);
+  }
+  return sessionId;
 }
 
-export async function generateCampaign(data: ProductFormValues) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-  // MODE SIMULASI
-  if (!apiUrl) {
-    console.log("Menjalankan API dalam Mode Simulasi...");
-    return new Promise<typeof MOCK_RESULT>((resolve, reject) => {
-      setTimeout(() => {
-        if (data.name.toLowerCase().includes("error")) {
-          reject(new Error("Simulasi Error Server"));
-        } else {
-          resolve(MOCK_RESULT);
-        }
-      }, 3000);
-    });
+export async function generateCampaign(
+  data: ProductFormValues
+): Promise<CampaignResult> {
+  const apiUrl = getApiBaseUrl();
+  const file = data.photo && data.photo.length > 0 ? data.photo[0] : null;
+  if (!file) {
+    throw new Error("Foto produk wajib diunggah");
   }
 
-  // MODE PRODUKSI
-  try {
-    const file = data.photo && data.photo.length > 0 ? data.photo[0] : null;
-    if (!file) throw new Error("Foto produk wajib diunggah");
+  const sessionId = getSessionId();
+  const { uploadUrl, photoKey } = await requestUploadUrl(apiUrl, file);
+  await uploadProductPhoto(uploadUrl, file);
 
-    const sessionId = getSessionId();
-    console.log("Mulai proses generasi untuk sesi:", sessionId);
+  const { jobId } = await submitGenerationJob(apiUrl, {
+    sessionId,
+    productName: data.name,
+    description: data.description,
+    category: data.category,
+    vibe: data.vibe,
+    price: data.price || undefined,
+    photoKey,
+  });
 
-    // Minta URL Upload
-    console.log("1. Meminta Pre-signed URL...");
-    const urlParams = new URLSearchParams({
-      fileName: file.name,
-      contentType: file.type,
-      fileSizeBytes: file.size.toString(),
-    });
-    
-    const uploadUrlRes = await fetch(`${apiUrl}/upload-url?${urlParams}`);
-    if (!uploadUrlRes.ok) throw new Error("Gagal mendapatkan link upload dari server");
-    const { uploadUrl, photoKey } = await uploadUrlRes.json();
+  await waitForJobCompletion(apiUrl, jobId);
+  return fetchCampaignResult(jobId);
+}
 
-    // Upload Gambar ke S3/GCS
-    console.log("2. Mengunggah gambar ke Cloud Storage...");
-    const s3Res = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type,
-      },
-      body: file,
-    });
-    if (!s3Res.ok) throw new Error("Gagal mengunggah gambar ke Cloud Storage");
+export async function fetchCampaignResult(
+  jobId: string
+): Promise<CampaignResult> {
+  const apiUrl = getApiBaseUrl();
+  const result = await fetchJson<ResultResponse>(`${apiUrl}/result/${jobId}`);
+  return mapResultResponse(result);
+}
 
-    // Submit Job ke Backend
-    console.log("3. Mengirim payload ke antrean (SQS/Tasks)...");
-    const payload = {
-      sessionId,
-      productName: data.name,
-      description: data.description,
-      category: data.category,
-      vibe: data.vibe,
-      price: data.price || undefined,
-      photoKey,
-    };
+export async function fetchCampaignHistory(): Promise<CampaignHistoryItem[]> {
+  const apiUrl = getApiBaseUrl();
+  const sessionId = getSessionId();
+  const params = new URLSearchParams({ sessionId });
+  const response = await fetchJson<HistoryResponse>(`${apiUrl}/history?${params}`);
 
-    const generateRes = await fetch(`${apiUrl}/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!generateRes.ok) throw new Error("Gagal membuat antrean job");
-    const { jobId } = await generateRes.json();
+  return response.jobs.map((job) => ({
+    ...job,
+    timestamp: formatTimestamp(job.createdAt),
+  }));
+}
 
-    // Polling Status (Nunggu AI selesai)
-    console.log(`4. Memantau status Job [${jobId}]...`);
-    let isComplete = false;
-    while (!isComplete) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+function getApiBaseUrl(): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (!apiUrl) {
+    throw new Error(
+      "NEXT_PUBLIC_API_BASE_URL belum diset. Frontend membutuhkan backend Cloud Run untuk menjalankan AI GCP."
+    );
+  }
+  return apiUrl.replace(/\/$/, "");
+}
 
-      const statusRes = await fetch(`${apiUrl}/status/${jobId}`);
-      if (!statusRes.ok) throw new Error("Gagal mengecek status job");
-      const statusData = await statusRes.json();
+async function requestUploadUrl(
+  apiUrl: string,
+  file: File
+): Promise<UploadUrlResponse> {
+  const params = new URLSearchParams({
+    fileName: file.name,
+    contentType: file.type,
+    fileSizeBytes: file.size.toString(),
+  });
 
-      console.log(`   Progress: ${statusData.progress}% (${statusData.status})`);
+  return fetchJson<UploadUrlResponse>(`${apiUrl}/upload-url?${params}`);
+}
 
-      if (statusData.status === "completed") {
-        isComplete = true;
-      } else if (statusData.status === "failed") {
-        throw new Error("Proses AI gagal diproses oleh worker");
-      }
+async function uploadProductPhoto(uploadUrl: string, file: File): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type,
+    },
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error("Gagal mengunggah foto produk ke Cloud Storage");
+  }
+}
+
+async function submitGenerationJob(
+  apiUrl: string,
+  payload: {
+    sessionId: string;
+    productName: string;
+    description: string;
+    category: ProductFormValues["category"];
+    vibe: ProductFormValues["vibe"];
+    price?: string;
+    photoKey: string;
+  }
+): Promise<SubmitJobResponse> {
+  return fetchJson<SubmitJobResponse>(`${apiUrl}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function waitForJobCompletion(
+  apiUrl: string,
+  jobId: string
+): Promise<void> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+    await delay(POLL_INTERVAL_MS);
+    const status = await fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
+
+    if (status.status === "completed") {
+      return;
     }
 
-    // Ambil Hasil Akhir
-    console.log("5. Mengambil hasil akhir...");
-    const resultRes = await fetch(`${apiUrl}/result/${jobId}`);
-    if (!resultRes.ok) throw new Error("Gagal mengambil data hasil AI");
-    const resultData = await resultRes.json();
-
-    // MAPPING
-    const selectedCaption = resultData.captions?.find((c: any) => c.length === "sedang")?.text 
-      || resultData.captions?.[0]?.text 
-      || "Caption belum tersedia.";
-
-    const joinedHashtags = resultData.hashtags?.join(" ") || "";
-
-    const formattedSchedule = resultData.schedule 
-      ? `${resultData.schedule.day}, ${resultData.schedule.time} (${resultData.schedule.reason}).`
-      : "Jadwal belum tersedia.";
-
-    return {
-      bannerUrl: resultData.bannerUrl || "https://placehold.co/600x400.png?text=Banner+Sedang+Diproses",
-      caption: selectedCaption,
-      hashtags: joinedHashtags,
-      schedule: formattedSchedule,
-    };
-
-  } catch (error) {
-    console.error("Pipeline API Error:", error);
-    throw error;
+    if (status.status === "failed") {
+      throw new Error("Proses AI gagal diproses oleh worker");
+    }
   }
+
+  throw new Error("Waktu tunggu AI habis. Coba cek status job beberapa saat lagi.");
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message || `Request gagal (${response.status})`);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function mapResultResponse(result: ResultResponse): CampaignResult {
+  const caption =
+    result.captions.find((item) => item.length === "sedang")?.text ??
+    result.captions[0]?.text ??
+    "";
+
+  return {
+    jobId: result.jobId,
+    bannerUrl: result.bannerUrl || undefined,
+    caption,
+    captions: result.captions,
+    hashtags: result.hashtags,
+    hashtagsText: result.hashtags.join(" "),
+    schedule: result.schedule,
+    scheduleText: formatSchedule(result.schedule),
+    contentIdeas: result.contentIdeas,
+  };
+}
+
+function formatSchedule(schedule: ScheduleSuggestion): string {
+  if (!schedule.day && !schedule.time && !schedule.reason) {
+    return "Jadwal belum tersedia.";
+  }
+
+  const dayTime = [schedule.day, schedule.time].filter(Boolean).join(", ");
+  return schedule.reason ? `${dayTime} (${schedule.reason}).` : dayTime;
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

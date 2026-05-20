@@ -54,9 +54,12 @@ gcloud run deploy "$SERVICE_NAME" \
   --set-env-vars="\
 GCP_PROJECT_ID=${PROJECT_ID},\
 GCP_REGION=${REGION},\
+GCP_LOCATION=global,\
 GCS_BUCKET_NAME=${BUCKET_NAME},\
 FIRESTORE_COLLECTION=kawan-jobs,\
 CLOUD_TASKS_QUEUE=kawan-jobs,\
+GCP_VERTEX_TEXT_MODEL=gemini-2.5-flash,\
+GCP_VERTEX_IMAGE_MODEL=imagen-4.0-generate-001,\
 WORKER_URL=${EXISTING_URL}" \
   --project="$PROJECT_ID"
 

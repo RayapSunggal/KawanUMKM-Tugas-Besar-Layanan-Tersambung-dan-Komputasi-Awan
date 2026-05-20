@@ -68,7 +68,7 @@ export default function ProductForm({
     }, [watchedPhoto]);
 
   const handleRemovePhoto = () => {
-    form.setValue("photo", undefined as any);
+    form.resetField("photo");
   };
 
   async function onSubmit(data: ProductFormValues) {
@@ -90,7 +90,7 @@ export default function ProductForm({
         <FormField
           control={form.control}
           name="photo"
-          render={({ field: { onChange, value, ...rest } }) => (
+          render={({ field: { onChange, ...rest } }) => (
             <FormItem>
               <FormLabel className="text-slate-700 font-semibold">Foto Produk</FormLabel>
               <FormControl>

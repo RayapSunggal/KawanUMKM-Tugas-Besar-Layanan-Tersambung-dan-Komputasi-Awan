@@ -53,6 +53,6 @@ export function buildPhotoKey(jobId: string, fileName: string): string {
   return `uploads/${jobId}/photo.${ext}`;
 }
 
-export function buildBannerKey(jobId: string): string {
-  return `results/${jobId}/banner.png`;
+export function buildBannerKey(jobId: string, extension = "png"): string {
+  return `results/${jobId}/banner.${extension}`;
 }

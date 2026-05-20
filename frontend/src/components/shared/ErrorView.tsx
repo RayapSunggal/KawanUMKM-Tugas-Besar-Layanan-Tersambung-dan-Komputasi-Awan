@@ -3,7 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { ServerCrash, RefreshCcw } from "lucide-react";
 
-export default function ErrorView({ onRetry }: { onRetry: () => void }) {
+export default function ErrorView({
+  onRetry,
+  message,
+}: {
+  onRetry: () => void;
+  message?: string;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center space-y-6 animate-in fade-in zoom-in duration-500">
       
@@ -16,7 +22,8 @@ export default function ErrorView({ onRetry }: { onRetry: () => void }) {
       <div className="space-y-2">
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Oops! Koneksi Terganggu</h2>
         <p className="text-sm text-slate-500 max-w-[250px] mx-auto leading-relaxed">
-          Server AI KawanUMKM sedang sibuk atau koneksi internetmu terputus. Jangan khawatir, data formulirmu tetap aman.
+          {message ??
+            "Server AI KawanUMKM sedang sibuk atau koneksi internetmu terputus. Jangan khawatir, data formulirmu tetap aman."}
         </p>
       </div>
 
