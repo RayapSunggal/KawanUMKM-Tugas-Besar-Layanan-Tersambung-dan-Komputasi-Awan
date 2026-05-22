@@ -16,9 +16,14 @@ import { ResultResponse, ApiResponse } from "../types/index.js";
  */
 export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const jobId = event.pathParameters?.jobId;
+  const sessionId = event.queryStringParameters?.sessionId;
 
   if (!jobId) {
     return badRequest("jobId wajib disertakan di path");
+  }
+
+  if (!sessionId) {
+    return badRequest("Query parameter 'sessionId' wajib disertakan");
   }
 
   let job;
@@ -30,6 +35,10 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
   }
 
   if (!job) {
+    return notFound(`Job dengan ID ${jobId} tidak ditemukan`);
+  }
+
+  if (job.sessionId !== sessionId) {
     return notFound(`Job dengan ID ${jobId} tidak ditemukan`);
   }
 

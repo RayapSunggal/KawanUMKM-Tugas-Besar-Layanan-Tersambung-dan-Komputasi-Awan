@@ -135,7 +135,7 @@ export async function fetchCampaignResult(
 
 export async function fetchCampaignStatus(jobId: string): Promise<StatusResponse> {
   const apiUrl = getApiBaseUrl();
-  return fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
+  return fetchJson<StatusResponse>(buildDeviceScopedJobUrl(apiUrl, "status", jobId));
 }
 
 export async function fetchCampaignHistory(): Promise<CampaignHistoryItem[]> {
@@ -224,7 +224,9 @@ async function waitForTextResult(
       }
     }
 
-    const status = await fetchJson<StatusResponse>(`${apiUrl}/status/${jobId}`);
+    const status = await fetchJson<StatusResponse>(
+      buildDeviceScopedJobUrl(apiUrl, "status", jobId)
+    );
     if (status.status === "failed") {
       throw new Error("Proses AI gagal diproses oleh worker");
     }
@@ -237,7 +239,16 @@ async function fetchCampaignResultFromApi(
   apiUrl: string,
   jobId: string
 ): Promise<ResultResponse> {
-  return fetchJson<ResultResponse>(`${apiUrl}/result/${jobId}`);
+  return fetchJson<ResultResponse>(buildDeviceScopedJobUrl(apiUrl, "result", jobId));
+}
+
+function buildDeviceScopedJobUrl(
+  apiUrl: string,
+  resource: "result" | "status",
+  jobId: string
+): string {
+  const params = new URLSearchParams({ sessionId: getSessionId() });
+  return `${apiUrl}/${resource}/${jobId}?${params}`;
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
