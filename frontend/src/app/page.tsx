@@ -32,6 +32,9 @@ export default function Home() {
   const [history, setHistory] = useState<CampaignHistoryItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [deferBanner, setDeferBanner] = useState(false);
+  const [lastGeneratedInput, setLastGeneratedInput] =
+    useState<ProductFormValues | null>(null);
+  const [canRegenerate, setCanRegenerate] = useState(false);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -48,6 +51,8 @@ export default function Home() {
   const handleStartGenerate = async (data: ProductFormValues) => {
     setView("loading");
     setSavedFormData(data);
+    setLastGeneratedInput(data);
+    setCanRegenerate(true);
     setErrorMessage(undefined);
 
     try {
@@ -66,7 +71,18 @@ export default function Home() {
     }
   };
 
+  const handleRegenerate = async () => {
+    if (!lastGeneratedInput) {
+      setView("input");
+      return;
+    }
+
+    await handleStartGenerate(lastGeneratedInput);
+  };
+
   const handleSelectHistory = async (item: CampaignHistoryItem) => {
+    setCanRegenerate(false);
+
     if (item.status === "queued") {
       setErrorMessage("Hasil untuk job ini belum mulai diproses.");
       setView("error");
@@ -97,9 +113,11 @@ export default function Home() {
 
   const handleStartOver = () => {
     setSavedFormData({});
+    setLastGeneratedInput(null);
     setCampaignResult(null);
     setErrorMessage(undefined);
     setDeferBanner(false);
+    setCanRegenerate(false);
     setView("input");
   };
 
@@ -156,6 +174,9 @@ export default function Home() {
           {view === "result" && campaignResult && (
             <ResultView
               onBack={handleStartOver}
+              onRegenerate={
+                canRegenerate && lastGeneratedInput ? handleRegenerate : undefined
+              }
               data={campaignResult}
               deferBanner={deferBanner}
             />

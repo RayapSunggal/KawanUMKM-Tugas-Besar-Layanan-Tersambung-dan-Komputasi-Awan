@@ -12,6 +12,7 @@ import {
   ImageOff,
   Lightbulb,
   Loader2,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ import {
 
 interface ResultViewProps {
   onBack: () => void;
+  onRegenerate?: () => void;
   data: CampaignResult;
   deferBanner?: boolean;
 }
@@ -35,6 +37,7 @@ const captionLabels: Record<CaptionVariant["length"], string> = {
 
 export default function ResultView({
   onBack,
+  onRegenerate,
   data,
   deferBanner = false,
 }: ResultViewProps) {
@@ -177,12 +180,26 @@ export default function ResultView({
         isGenerating={isBannerGenerating}
       />
 
-      <Button
-        onClick={onBack}
-        className="w-full rounded-xl h-12 text-md font-bold mt-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 transition-all"
-      >
-        Buat Promosi Lainnya
-      </Button>
+      <div className="space-y-3 pt-2">
+        {onRegenerate && (
+          <Button
+            type="button"
+            onClick={onRegenerate}
+            variant="outline"
+            className="w-full rounded-xl h-12 text-md font-bold border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 transition-all"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Buat Ulang
+          </Button>
+        )}
+
+        <Button
+          onClick={onBack}
+          className="w-full rounded-xl h-12 text-md font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 transition-all"
+        >
+          Buat Promosi Lainnya
+        </Button>
+      </div>
     </div>
   );
 }
