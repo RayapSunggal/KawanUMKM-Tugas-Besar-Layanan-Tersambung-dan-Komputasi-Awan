@@ -1,27 +1,21 @@
-// ─── Job Status ──────────────────────────────────────────────────────────────
-
 export type JobStatus = "queued" | "processing" | "completed" | "failed";
 
 export interface Job {
   jobId: string;
   sessionId: string;
   status: JobStatus;
-  progress: number; // 0–100
-  createdAt: string; // ISO 8601
+  progress: number;
+  createdAt: string;
   updatedAt: string;
 
-  // Input
   productName: string;
   description: string;
   category: ProductCategory;
   vibe: ProductVibe;
   price?: string;
-  photoKey: string; // S3 object key
+  photoKey: string;
 
-  // Output (populated setelah completed)
   result?: GenerationResult;
-
-  // Error info (populated bila status = failed)
   errorMessage?: string;
   assetErrors?: AssetErrors;
 }
@@ -31,9 +25,13 @@ export interface AssetErrors {
   bannerFailed?: boolean;
 }
 
-// ─── Input Types ─────────────────────────────────────────────────────────────
+export type ProductCategory =
+  | "kuliner"
+  | "fashion"
+  | "kerajinan"
+  | "jasa"
+  | "lainnya";
 
-export type ProductCategory = "kuliner" | "fashion" | "kerajinan" | "jasa" | "lainnya";
 export type ProductVibe = "Modern" | "Tradisional";
 
 export interface SubmitJobInput {
@@ -46,14 +44,12 @@ export interface SubmitJobInput {
   photoKey: string;
 }
 
-// ─── Result Types ─────────────────────────────────────────────────────────────
-
 export interface GenerationResult {
   captions: CaptionVariant[];
   hashtags: string[];
   schedule: ScheduleSuggestion;
   contentIdeas: string[];
-  bannerUrl?: string; // S3 presigned URL atau CloudFront URL
+  bannerUrl?: string;
 }
 
 export interface CaptionVariant {
@@ -66,8 +62,6 @@ export interface ScheduleSuggestion {
   time: string;
   reason: string;
 }
-
-// ─── API Response Types ───────────────────────────────────────────────────────
 
 export interface SubmitResponse {
   jobId: string;
@@ -103,12 +97,10 @@ export interface ResultResponse {
   assetErrors?: AssetErrors;
 }
 
-// ─── Lambda Helpers ───────────────────────────────────────────────────────────
-
 export interface ApiResponse<T = unknown> {
   statusCode: number;
   headers: Record<string, string>;
-  body: string; // JSON.stringify(T)
+  body: string;
 }
 
 export interface ErrorBody {
@@ -116,9 +108,7 @@ export interface ErrorBody {
   details?: unknown;
 }
 
-// ─── SQS Message ─────────────────────────────────────────────────────────────
-
-export interface SqsJobMessage {
+export interface CloudTaskJobMessage {
   jobId: string;
   sessionId: string;
   productName: string;

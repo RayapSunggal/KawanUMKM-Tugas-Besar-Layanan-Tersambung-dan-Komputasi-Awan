@@ -16,11 +16,13 @@ import {
 import type {
   AssetErrors,
   CaptionVariant,
+  CloudTaskJobMessage,
   GenerationResult,
-  SqsJobMessage,
 } from "../types/index.js";
 
-export async function processWorkerJob(jobMsg: SqsJobMessage): Promise<void> {
+export async function processWorkerJob(
+  jobMsg: CloudTaskJobMessage
+): Promise<void> {
   const { jobId } = jobMsg;
   const assetErrors: AssetErrors = {};
   let textResult: MarketingTextResult | null = null;
@@ -58,7 +60,7 @@ export async function processWorkerJob(jobMsg: SqsJobMessage): Promise<void> {
 }
 
 async function tryGenerateText(
-  jobMsg: SqsJobMessage,
+  jobMsg: CloudTaskJobMessage,
   assetErrors: AssetErrors
 ): Promise<MarketingTextResult | null> {
   const input: GenerateMarketingTextInput = {
@@ -82,7 +84,7 @@ async function tryGenerateText(
 }
 
 async function tryGenerateBanner(
-  jobMsg: SqsJobMessage,
+  jobMsg: CloudTaskJobMessage,
   assetErrors: AssetErrors,
   textResult: MarketingTextResult | null
 ): Promise<string | undefined> {
@@ -119,7 +121,7 @@ async function tryGenerateBanner(
 }
 
 async function tryReadProductImage(
-  jobMsg: SqsJobMessage
+  jobMsg: CloudTaskJobMessage
 ): Promise<{ base64: string; mimeType: string } | undefined> {
   try {
     const image = await downloadBuffer(jobMsg.photoKey);

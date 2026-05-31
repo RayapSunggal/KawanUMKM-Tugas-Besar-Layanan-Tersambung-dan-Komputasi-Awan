@@ -6,9 +6,7 @@ const BUCKET = process.env.GCS_BUCKET_NAME ?? "kawan-uploads";
 
 const bucket = () => storage.bucket(BUCKET);
 
-// ─── Signed Upload URL (pengganti presigned PUT S3) ───────────────────────────
-
-export async function getPresignedUploadUrl(
+export async function getSignedUploadUrl(
   key: string,
   contentType: string,
   expiresIn = 300
@@ -22,9 +20,7 @@ export async function getPresignedUploadUrl(
   return url;
 }
 
-// ─── Signed Download URL (pengganti presigned GET S3) ────────────────────────
-
-export async function getPresignedDownloadUrl(
+export async function getSignedDownloadUrl(
   key: string,
   expiresIn = 3600
 ): Promise<string> {
@@ -35,8 +31,6 @@ export async function getPresignedDownloadUrl(
   });
   return url;
 }
-
-// ─── Upload Buffer (dipakai Worker untuk simpan banner) ───────────────────────
 
 export async function uploadBuffer(
   key: string,
@@ -62,8 +56,6 @@ export async function downloadBuffer(
     contentType: metadata.contentType ?? inferContentType(key),
   };
 }
-
-// ─── Key Helpers (identik dengan s3.ts) ──────────────────────────────────────
 
 export function buildPhotoKey(jobId: string, fileName: string): string {
   const ext = fileName.split(".").pop() ?? "jpg";

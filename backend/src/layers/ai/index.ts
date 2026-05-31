@@ -6,10 +6,8 @@ export {
   generateTextContent,
   generateCaption,
   generateHashtags,
-  bedrockTextGenerate,
 } from "./vertex-text.js";
 export {
   generateMarketingImage,
   generateBannerImage,
-  bedrockImageGenerate,
 } from "./vertex-image.js";

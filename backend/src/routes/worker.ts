@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { processWorkerJob } from "../handlers/worker.js";
-import { SqsJobMessage } from "../types/index.js";
+import { CloudTaskJobMessage } from "../types/index.js";
 
 export async function workerRoute(req: Request, res: Response): Promise<void> {
-  const jobMsg = req.body as SqsJobMessage;
+  const jobMsg = req.body as CloudTaskJobMessage;
 
   if (!jobMsg?.jobId) {
     res.status(400).json({ error: "Payload tidak valid" });

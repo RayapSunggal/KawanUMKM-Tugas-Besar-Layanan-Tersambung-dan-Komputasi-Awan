@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-// ─── Submit Job Schema (FR-01 s.d. FR-07) ────────────────────────────────────
-
 export const submitJobSchema = z.object({
   productName: z
     .string()
@@ -18,16 +16,13 @@ export const submitJobSchema = z.object({
     errorMap: () => ({ message: "Vibe tidak valid" }),
   }),
   price: z.string().optional(),
-  // photoKey diperoleh dari S3 presigned upload — tidak dari body form
   photoKey: z.string().min(1, "photoKey wajib diisi"),
   sessionId: z.string().min(1, "sessionId wajib diisi"),
 });
 
 export type SubmitJobInput = z.infer<typeof submitJobSchema>;
 
-// ─── Presigned URL Request Schema (FR-01) ────────────────────────────────────
-
-export const presignedUrlSchema = z.object({
+export const signedUrlSchema = z.object({
   fileName: z.string().min(1, "fileName wajib diisi"),
   contentType: z.enum(["image/jpeg", "image/jpg", "image/png"], {
     errorMap: () => ({ message: "Format file harus PNG, JPG, atau JPEG" }),
@@ -37,4 +32,4 @@ export const presignedUrlSchema = z.object({
     .max(5 * 1024 * 1024, "Ukuran file maksimal 5MB"),
 });
 
-export type PresignedUrlInput = z.infer<typeof presignedUrlSchema>;
+export type SignedUrlInput = z.infer<typeof signedUrlSchema>;

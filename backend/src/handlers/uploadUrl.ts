@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
-import { presignedUrlSchema } from "../lib/validate.js";
-import { getPresignedUploadUrl, buildPhotoKey } from "../lib/storage.js";
+import { signedUrlSchema } from "../lib/validate.js";
+import { getSignedUploadUrl, buildPhotoKey } from "../lib/storage.js";
 import { ok, badRequest, serverError } from "../lib/response.js";
 import { GcpEvent } from "../lib/adapter.js";
 import { ApiResponse } from "../types/index.js";
@@ -17,7 +17,7 @@ import { ApiResponse } from "../types/index.js";
 export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const qs = event.queryStringParameters ?? {};
 
-  const parsed = presignedUrlSchema.safeParse({
+  const parsed = signedUrlSchema.safeParse({
     fileName: qs.fileName,
     contentType: qs.contentType,
     fileSizeBytes: qs.fileSizeBytes ? Number(qs.fileSizeBytes) : undefined,
@@ -33,7 +33,7 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
 
   let uploadUrl: string;
   try {
-    uploadUrl = await getPresignedUploadUrl(photoKey, contentType);
+    uploadUrl = await getSignedUploadUrl(photoKey, contentType);
   } catch (err) {
     console.error("Gagal generate signed URL", err);
     return serverError("Gagal membuat URL upload");
