@@ -60,4 +60,3 @@ export async function generateMarketingImage(
 }
 
 export const generateBannerImage = generateMarketingImage;
-export const bedrockImageGenerate = generateMarketingImage;

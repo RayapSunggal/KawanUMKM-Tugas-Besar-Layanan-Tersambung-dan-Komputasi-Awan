@@ -3,7 +3,7 @@ node_modules/
 .pnp
 .pnp.js
 
-# environment variables — JANGAN PERNAH DI-COMMIT
+# environment variables - JANGAN PERNAH DI-COMMIT
 .env
 .env.local
 .env.*.local
@@ -15,16 +15,13 @@ frontend/out/
 # backend build output
 backend/dist/
 
-# aws credentials
-.aws/
-
 # deploy artifacts
-infrastructure/*.zip
+*.zip
+
+# Firebase build artifacts
+.firebase/
 
 # misc
 .DS_Store
 *.pem
 Thumbs.db
-
-# Firebase build artifacts
-.firebase/

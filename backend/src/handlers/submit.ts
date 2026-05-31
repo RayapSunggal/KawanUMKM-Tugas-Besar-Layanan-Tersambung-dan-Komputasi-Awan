@@ -4,7 +4,7 @@ import { putJob } from "../lib/firestore.js";
 import { enqueueJob } from "../lib/tasks.js";
 import { ok, badRequest, serverError } from "../lib/response.js";
 import { GcpEvent } from "../lib/adapter.js";
-import { Job, SqsJobMessage, ApiResponse } from "../types/index.js";
+import { Job, CloudTaskJobMessage, ApiResponse } from "../types/index.js";
 
 /**
  * POST /generate
@@ -56,7 +56,7 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
     return serverError("Gagal menyimpan job ke database");
   }
 
-  const message: SqsJobMessage = {
+  const message: CloudTaskJobMessage = {
     jobId,
     sessionId: input.sessionId,
     productName: input.productName,

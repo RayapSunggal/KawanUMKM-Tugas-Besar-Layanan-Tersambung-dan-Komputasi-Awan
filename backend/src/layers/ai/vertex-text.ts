@@ -80,4 +80,3 @@ function buildJsonCandidates(text: string): string[] {
 export const generateTextContent = generateMarketingText;
 export const generateCaption = generateMarketingText;
 export const generateHashtags = generateMarketingText;
-export const bedrockTextGenerate = generateMarketingText;

@@ -1,5 +1,5 @@
 import { getJob } from "../lib/firestore.js";
-import { getPresignedDownloadUrl } from "../lib/storage.js";
+import { getSignedDownloadUrl } from "../lib/storage.js";
 import { ok, badRequest, notFound, serverError } from "../lib/response.js";
 import { GcpEvent } from "../lib/adapter.js";
 import { ResultResponse, ApiResponse } from "../types/index.js";
@@ -49,7 +49,7 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
   let bannerUrl: string | undefined;
   if (job.result.bannerUrl) {
     try {
-      bannerUrl = await getPresignedDownloadUrl(job.result.bannerUrl);
+      bannerUrl = await getSignedDownloadUrl(job.result.bannerUrl);
     } catch (err) {
       console.warn("Gagal membuat signed URL banner", err);
     }
