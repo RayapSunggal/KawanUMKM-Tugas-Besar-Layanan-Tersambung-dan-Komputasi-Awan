@@ -2,7 +2,7 @@ import { ApiResponse, ErrorBody } from "../types/index.js";
 
 const CORS_HEADERS = {
   "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": process.env.ALLOWED_ORIGIN ?? "*",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
@@ -34,6 +34,14 @@ export function badRequest(message: string, details?: unknown): ApiResponse<Erro
 export function notFound(message = "Resource tidak ditemukan"): ApiResponse<ErrorBody> {
   return {
     statusCode: 404,
+    headers: CORS_HEADERS,
+    body: JSON.stringify({ error: message }),
+  };
+}
+
+export function tooManyRequests(message = "Terlalu banyak permintaan, coba lagi nanti"): ApiResponse<ErrorBody> {
+  return {
+    statusCode: 429,
     headers: CORS_HEADERS,
     body: JSON.stringify({ error: message }),
   };
