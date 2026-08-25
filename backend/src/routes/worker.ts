@@ -1,8 +1,15 @@
 import { Request, Response } from "express";
 import { processWorkerJob } from "../handlers/worker.js";
+import { isAuthorizedWorkerCall } from "../lib/oidc.js";
 import { CloudTaskJobMessage } from "../types/index.js";
 
 export async function workerRoute(req: Request, res: Response): Promise<void> {
+  // Hanya Cloud Tasks (dengan OIDC token SA yang benar) yang boleh memicu Gemini
+  if (!(await isAuthorizedWorkerCall(req.headers.authorization))) {
+    res.status(401).json({ error: "Tidak diizinkan" });
+    return;
+  }
+
   const jobMsg = req.body as CloudTaskJobMessage;
 
   if (!jobMsg?.jobId) {
