@@ -1,10 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import { submitJobSchema } from "../lib/validate.js";
-import { putJob } from "../lib/firestore.js";
+import { putJob, claimDailyQuota } from "../lib/firestore.js";
 import { enqueueJob } from "../lib/tasks.js";
-import { ok, badRequest, serverError } from "../lib/response.js";
+import { ok, badRequest, serverError, tooManyRequests } from "../lib/response.js";
 import { GcpEvent } from "../lib/adapter.js";
 import { Job, CloudTaskJobMessage, ApiResponse } from "../types/index.js";
+
+const DAILY_GENERATE_CAP = Number(process.env.DAILY_GENERATE_CAP ?? 100);
 
 /**
  * POST /generate
@@ -33,6 +35,18 @@ export async function handler(event: GcpEvent): Promise<ApiResponse> {
   const input = parsed.data;
   const jobId = uuidv4();
   const now = new Date().toISOString();
+
+  // Kill switch: kuota harian global. Dicek SEBELUM membuat job/task
+  // supaya tidak ada biaya Gemini saat kuota habis.
+  try {
+    const allowed = await claimDailyQuota(DAILY_GENERATE_CAP);
+    if (!allowed) {
+      return tooManyRequests("Kuota generate harian sudah habis, coba lagi besok");
+    }
+  } catch (err) {
+    console.error("Gagal cek kuota harian", err);
+    return serverError("Gagal memeriksa kuota");
+  }
 
   const job: Job = {
     jobId,

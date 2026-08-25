@@ -79,6 +79,14 @@ gcloud tasks queues create kawan-jobs \
   --max-backoff=300s \
   --project="$PROJECT_ID" 2>/dev/null || echo "  (Queue sudah ada, skip)"
 
+# Throttle dispatch: batasi laju pemrosesan agar retry/spam tidak amplify biaya
+gcloud tasks queues update kawan-jobs \
+  --location="$REGION" \
+  --max-dispatches-per-second=1 \
+  --max-concurrent-dispatches=2 \
+  --max-attempts=2 \
+  --project="$PROJECT_ID"
+
 # Dead-letter queue
 gcloud tasks queues create kawan-jobs-dlq \
   --location="$REGION" \
@@ -106,6 +114,22 @@ for ROLE in \
 done
 echo "  Service Account: $SA_EMAIL"
 
+# ── IAM untuk OIDC worker auth (Cloud Tasks → /worker) ───────────────────────
+# Backend SA boleh membuat task yang memakai dirinya sendiri sebagai identitas OIDC
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/iam.serviceAccountUser" \
+  --project="$PROJECT_ID" --quiet
+
+# Cloud Tasks service agent boleh mint OIDC token atas nama SA tersebut
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
+TASKS_AGENT="service-${PROJECT_NUMBER}@gcp-sa-cloudtasks.iam.gserviceaccount.com"
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --member="serviceAccount:$TASKS_AGENT" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project="$PROJECT_ID" --quiet
+echo "  OIDC IAM bindings siap."
+
 # ── Firestore Security Rules ──────────────────────────────────────────────────
 echo "[6/7] Deploy Firestore security rules..."
 RULES_FILE="$(dirname "$0")/../firestore.rules"
@@ -131,5 +155,11 @@ fi
 
 echo ""
 echo "[7/7] Setup selesai!"
+echo ""
+echo "PENTING — pasang budget alert (belum bisa di-skip, wajib manual sekali):"
+echo "  1. Buka https://console.cloud.google.com/billing/budgets?project=$PROJECT_ID"
+echo "  2. Create budget → amount sesuai toleransi (mis. Rp 500.000)"
+echo "  3. Threshold alert: 50%, 90%, 100% → kirim ke email kamu"
+echo ""
 echo "Jalankan berikutnya: bash infra/deploy-cloud-run.sh"
 echo "BUCKET_NAME=$BUCKET_NAME"

@@ -88,3 +88,23 @@ export async function listJobsBySession(sessionId: string): Promise<Job[]> {
     .get();
   return snap.docs.map((d) => d.data() as Job);
 }
+
+// ─── Daily Quota (kill switch global anti-abuse) ──────────────────────────────
+
+/**
+ * Klaim 1 slot kuota generate untuk hari ini (UTC). Atomik via transaksi.
+ * Return false kalau kuota harian global sudah habis — ini pembatas
+ * pengeluaran terakhir yang berlaku lintas instance & lintas user.
+ */
+export async function claimDailyQuota(limit: number): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  const ref = db.collection("kawan-counters").doc(`generate-${today}`);
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = (snap.data()?.count as number | undefined) ?? 0;
+    if (count >= limit) return false;
+    tx.set(ref, { count: count + 1 }, { merge: true });
+    return true;
+  });
+}

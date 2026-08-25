@@ -51,6 +51,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --cpu=1 \
   --timeout=300s \
   --concurrency=80 \
+  --max-instances=3 \
   --set-env-vars="\
 GCP_PROJECT_ID=${PROJECT_ID},\
 GCP_REGION=${REGION},\
@@ -60,6 +61,9 @@ FIRESTORE_COLLECTION=kawan-jobs,\
 CLOUD_TASKS_QUEUE=kawan-jobs,\
 GCP_VERTEX_TEXT_MODEL=gemini-2.5-flash,\
 GCP_VERTEX_IMAGE_MODEL=gemini-3-pro-image-preview,\
+DAILY_GENERATE_CAP=${DAILY_GENERATE_CAP:-100},\
+ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-*},\
+TASKS_CALLER_EMAIL=${SA_EMAIL},\
 WORKER_URL=${EXISTING_URL}" \
   --project="$PROJECT_ID"
 
